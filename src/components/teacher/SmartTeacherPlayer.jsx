@@ -7,7 +7,7 @@ import {
   StopIcon,
   SpeakerWaveIcon,
 } from '@heroicons/react/24/outline'
-import { listGeminiVoices, THINK_TIME_OPTIONS } from '../../services/teacherSpeechService'
+import { formatVoiceLabel, THINK_TIME_OPTIONS } from '../../services/teacherSpeechService'
 
 const PHASE_LABELS = {
   idle: 'Pronto para ensinar',
@@ -20,7 +20,7 @@ const PHASE_LABELS = {
 }
 
 /**
- * Painel do Modo Professor com vozes Gemini Live.
+ * Painel do Modo Professor — voz gratuita do aparelho (sem gastar API Gemini).
  */
 export default function SmartTeacherPlayer({
   supported,
@@ -30,6 +30,7 @@ export default function SmartTeacherPlayer({
   settings,
   updateSettings,
   selectedVoice,
+  availableVoices = [],
   error,
   onPlay,
   onPause,
@@ -39,12 +40,12 @@ export default function SmartTeacherPlayer({
 }) {
   const [showConfig, setShowConfig] = useState(false)
   const isActive = status === 'playing' || status === 'thinking' || status === 'paused'
-  const voiceOptions = listGeminiVoices(settings.gender)
+  const maleEmpty = settings.gender === 'male' && availableVoices.length === 0
 
   if (!supported) {
     return (
       <div className={`rounded-2xl border border-cp-border bg-cp-surface/80 px-3 py-2 text-xs text-cp-muted ${className}`}>
-        Reprodução de áudio não suportada neste navegador.
+        Leitura de áudio não suportada neste navegador.
       </div>
     )
   }
@@ -61,7 +62,7 @@ export default function SmartTeacherPlayer({
           </div>
           {!compact && (
             <p className="mt-1 text-[11px] leading-relaxed text-cp-muted">
-              Vozes Gemini Live (Aoede, Kore, Despina, Charon…) — sem Assistente Google.
+              Voz gratuita do aparelho — prioriza Natural moderna. Não gasta API Gemini.
             </p>
           )}
         </div>
@@ -111,8 +112,8 @@ export default function SmartTeacherPlayer({
 
         <div className="ml-auto flex items-center gap-1.5 text-[11px] text-cp-muted">
           <SpeakerWaveIcon className="h-3.5 w-3.5" />
-          <span className="max-w-[160px] truncate sm:max-w-[240px]">
-            Gemini · {selectedVoice?.label || settings.voiceName}
+          <span className="max-w-[160px] truncate sm:max-w-[260px]">
+            {selectedVoice ? formatVoiceLabel(selectedVoice) : 'Escolha uma voz'}
           </span>
         </div>
       </div>
@@ -151,7 +152,7 @@ export default function SmartTeacherPlayer({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => updateSettings({ gender: 'female' })}
+                onClick={() => updateSettings({ gender: 'female', voiceURI: '' })}
                 className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
                   settings.gender === 'female'
                     ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
@@ -162,7 +163,7 @@ export default function SmartTeacherPlayer({
               </button>
               <button
                 type="button"
-                onClick={() => updateSettings({ gender: 'male' })}
+                onClick={() => updateSettings({ gender: 'male', voiceURI: '' })}
                 className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
                   settings.gender === 'male'
                     ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
@@ -176,19 +177,30 @@ export default function SmartTeacherPlayer({
 
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-cp-muted">
-              Voz Gemini Live
+              Voz {settings.gender === 'male' ? 'masculina' : 'feminina'} instalada
             </label>
-            <select
-              value={settings.voiceName}
-              onChange={(e) => updateSettings({ voiceName: e.target.value })}
-              className="w-full rounded-xl border border-cp-border bg-cp-surface px-3 py-2 text-xs text-cp-text"
-            >
-              {voiceOptions.map((voice) => (
-                <option key={voice.id} value={voice.id}>
-                  {voice.label} — {voice.hint}
-                </option>
-              ))}
-            </select>
+            {availableVoices.length > 0 ? (
+              <select
+                value={settings.voiceURI || selectedVoice?.voiceURI || ''}
+                onChange={(e) => updateSettings({ voiceURI: e.target.value })}
+                className="w-full rounded-xl border border-cp-border bg-cp-surface px-3 py-2 text-xs text-cp-text"
+              >
+                {availableVoices.map((voice) => (
+                  <option key={voice.voiceURI || voice.name} value={voice.voiceURI || voice.name}>
+                    {formatVoiceLabel(voice)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
+                {maleEmpty
+                  ? 'Nenhuma voz masculina em português encontrada neste aparelho. No Windows, abra o Edge e instale “Microsoft Antonio Online (Natural)”. No iPhone: Ajustes → Acessibilidade → Conteúdo falado → Vozes.'
+                  : 'Nenhuma voz em português encontrada. Instale uma voz Natural pt-BR no sistema.'}
+              </p>
+            )}
+            <p className="mt-1.5 text-[10px] leading-relaxed text-cp-muted">
+              Evitamos vozes antigas do Assistente Google. Preferimos Natural/Neural (Edge/Windows/iOS).
+            </p>
           </div>
 
           <div>
@@ -214,7 +226,7 @@ export default function SmartTeacherPlayer({
             </label>
             <input
               type="range"
-              min="0.75"
+              min="0.7"
               max="1.25"
               step="0.05"
               value={settings.speechRate}

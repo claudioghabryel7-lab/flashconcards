@@ -5,18 +5,20 @@ import {
   cancelSpeech,
   getTeacherSettings,
   isSpeechSupported,
+  listTeacherVoices,
   pauseSpeech,
+  pickTeacherVoice,
   playTickSound,
   prepareSpeechText,
-  resolveTeacherVoice,
   resumeSpeech,
   runThinkCountdown,
   saveTeacherSettings,
   speakText,
+  waitForVoices,
 } from '../services/teacherSpeechService'
 
 /**
- * Orquestra o Modo Professor nos flashcards com vozes Gemini Live.
+ * Orquestra o Modo Professor (voz gratuita do aparelho).
  */
 export function useSmartTeacher({
   cards = [],
@@ -28,9 +30,10 @@ export function useSmartTeacher({
   deckTitle = '',
 }) {
   const [supported] = useState(() => isSpeechSupported())
+  const [voices, setVoices] = useState([])
   const [settings, setSettings] = useState(() => getTeacherSettings())
-  const [status, setStatus] = useState('idle') // idle | playing | paused | thinking
-  const [phase, setPhase] = useState('idle') // intro | front | thinking | back | next | done
+  const [status, setStatus] = useState('idle')
+  const [phase, setPhase] = useState('idle')
   const [thinkRemaining, setThinkRemaining] = useState(0)
   const [enabled, setEnabled] = useState(false)
   const [error, setError] = useState(null)
@@ -43,6 +46,7 @@ export function useSmartTeacher({
   const indexRef = useRef(currentIndex)
   const flippedRef = useRef(flipped)
   const settingsRef = useRef(settings)
+  const voicesRef = useRef([])
 
   useEffect(() => {
     cardsRef.current = cards
@@ -56,8 +60,28 @@ export function useSmartTeacher({
   useEffect(() => {
     settingsRef.current = settings
   }, [settings])
+  useEffect(() => {
+    voicesRef.current = voices
+  }, [voices])
 
-  const selectedVoice = resolveTeacherVoice(settings)
+  useEffect(() => {
+    let alive = true
+    waitForVoices().then((list) => {
+      if (!alive) return
+      setVoices(list)
+      const cfg = getTeacherSettings()
+      const best = pickTeacherVoice(list, cfg.gender, cfg.voiceURI)
+      if (best?.voiceURI && best.voiceURI !== cfg.voiceURI) {
+        setSettings(saveTeacherSettings({ voiceURI: best.voiceURI }))
+      }
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const selectedVoice = pickTeacherVoice(voices, settings.gender, settings.voiceURI)
+  const availableVoices = listTeacherVoices(voices, settings.gender)
 
   const stopAll = useCallback(() => {
     runIdRef.current += 1
@@ -76,7 +100,14 @@ export function useSmartTeacher({
   useEffect(() => () => stopAll(), [stopAll])
 
   const updateSettings = useCallback((partial) => {
-    const next = saveTeacherSettings(partial)
+    let next = saveTeacherSettings(partial)
+    // Ao trocar gênero, já escolhe a melhor voz masculina/feminina disponível
+    if (partial?.gender && voicesRef.current.length) {
+      const best = pickTeacherVoice(voicesRef.current, next.gender, next.voiceURI)
+      if (best?.voiceURI && best.voiceURI !== next.voiceURI) {
+        next = saveTeacherSettings({ voiceURI: best.voiceURI })
+      }
+    }
     setSettings(next)
     return next
   }, [])
@@ -94,8 +125,16 @@ export function useSmartTeacher({
       if (!clean) return
       await waitIfPaused(signal)
       const cfg = settingsRef.current
+      let voiceList = voicesRef.current
+      if (!voiceList?.length) {
+        voiceList = await waitForVoices()
+        voicesRef.current = voiceList
+        setVoices(voiceList)
+      }
+      const voice = pickTeacherVoice(voiceList, cfg.gender, cfg.voiceURI)
       await speakText(clean, {
-        voiceName: cfg.voiceName,
+        voice,
+        gender: cfg.gender,
         rate: cfg.speechRate,
         signal,
       })
@@ -107,7 +146,7 @@ export function useSmartTeacher({
   const runSessionFrom = useCallback(
     async (startIndex) => {
       if (!supported) {
-        setError('Reprodução de áudio não suportada neste navegador.')
+        setError('Seu navegador não suporta leitura de áudio gratuita.')
         return
       }
 
@@ -238,6 +277,8 @@ export function useSmartTeacher({
     settings,
     updateSettings,
     selectedVoice,
+    availableVoices,
+    voices,
     error,
     play,
     pause,

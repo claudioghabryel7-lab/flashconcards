@@ -1,10 +1,10 @@
 /**
- * Motor de fala do Modo Professor — vozes Gemini Live (TTS).
- * Aoede, Despina, Kore, Sulafat, Vindemiatrix, Zephyr, Charon, Orus, etc.
- * Não usa Web Speech / Assistente Google (Regina, Yasmin…).
+ * Motor de fala do Modo Professor — GRATUITO (Web Speech API).
+ * Não usa Gemini / não gasta API.
+ * Prioriza vozes Natural/Neural modernas; evita Assistente Google antigo.
  */
 
-const STORAGE_KEY = 'flashconcards.smartTeacher.v2'
+const STORAGE_KEY = 'flashconcards.smartTeacher.v3'
 
 export const THINK_TIME_OPTIONS = [
   { value: 5, label: '5 segundos' },
@@ -16,75 +16,63 @@ export const THINK_TIME_OPTIONS = [
   { value: 60, label: '1 minuto' },
 ]
 
-/** Catálogo Gemini Live / Gemini TTS */
-export const GEMINI_LIVE_VOICES = {
-  female: [
-    { id: 'Aoede', label: 'Aoede', hint: 'Leve e envolvente' },
-    { id: 'Despina', label: 'Despina', hint: 'Suave' },
-    { id: 'Kore', label: 'Kore', hint: 'Firme' },
-    { id: 'Sulafat', label: 'Sulafat', hint: 'Acolhedora' },
-    { id: 'Vindemiatrix', label: 'Vindemiatrix', hint: 'Gentil' },
-    { id: 'Zephyr', label: 'Zephyr', hint: 'Brilhante' },
-    { id: 'Leda', label: 'Leda', hint: 'Jovem' },
-    { id: 'Achernar', label: 'Achernar', hint: 'Macia' },
-    { id: 'Callirrhoe', label: 'Callirrhoe', hint: 'Descontraída' },
-    { id: 'Autonoe', label: 'Autonoe', hint: 'Clara' },
-    { id: 'Erinome', label: 'Erinome', hint: 'Nítida' },
-    { id: 'Gacrux', label: 'Gacrux', hint: 'Madura' },
-    { id: 'Laomedeia', label: 'Laomedeia', hint: 'Animada' },
-    { id: 'Pulcherrima', label: 'Pulcherrima', hint: 'Direta' },
-  ],
-  male: [
-    { id: 'Charon', label: 'Charon', hint: 'Informativo' },
-    { id: 'Orus', label: 'Orus', hint: 'Firme' },
-    { id: 'Puck', label: 'Puck', hint: 'Animado' },
-    { id: 'Fenrir', label: 'Fenrir', hint: 'Energético' },
-    { id: 'Alnilam', label: 'Alnilam', hint: 'Firme' },
-    { id: 'Schedar', label: 'Schedar', hint: 'Equilibrado' },
-    { id: 'Iapetus', label: 'Iapetus', hint: 'Claro' },
-    { id: 'Umbriel', label: 'Umbriel', hint: 'Descontraído' },
-    { id: 'Algieba', label: 'Algieba', hint: 'Suave' },
-    { id: 'Enceladus', label: 'Enceladus', hint: 'Aéreo' },
-    { id: 'Rasalgethi', label: 'Rasalgethi', hint: 'Didático' },
-    { id: 'Sadaltager', label: 'Sadaltager', hint: 'Conhecedor' },
-    { id: 'Achird', label: 'Achird', hint: 'Amigável' },
-    { id: 'Sadachbia', label: 'Sadachbia', hint: 'Vivo' },
-    { id: 'Zubenelgenubi', label: 'Zubenelgenubi', hint: 'Casual' },
-    { id: 'Algenib', label: 'Algenib', hint: 'Grave' },
-  ],
-}
-
 export const DEFAULT_TEACHER_SETTINGS = {
   gender: 'female',
-  voiceName: 'Aoede',
+  voiceURI: '',
   thinkSeconds: 15,
-  speechRate: 1,
+  speechRate: 0.95,
   autoAdvance: true,
 }
 
-function defaultVoiceForGender(gender) {
-  return gender === 'male' ? 'Charon' : 'Aoede'
-}
+/** Vozes antigas / Assistente Google — evitar */
+const BLOCKED_VOICE_HINTS = [
+  'regina', 'bittar', 'yasmin', 'yasmim', 'yasin',
+  'google português', 'google portugues', 'google brasil',
+  'chrome os', 'android', 'espeak', 'pico', 'festival',
+  'microsoft maria - portuguese', // voz antiga SAPI, não Natural
+  'microsoft daniel - portuguese',
+]
+
+const FEMALE_HINTS = [
+  'female', 'woman', 'feminina', 'mulher',
+  'francisca', 'thalita', 'maria', 'luciana', 'helena', 'gabriela',
+  'vitória', 'vitoria', 'fernanda', 'camila', 'ana', 'julia', 'júlia',
+  'beatriz', 'isabela', 'daniela', 'patricia', 'patrícia', 'sara',
+  'sofia', 'joana', 'ines', 'inês', 'amalia', 'amália', 'raquel',
+  'catarina', 'lucia', 'lúcia', 'fernanda', 'leticia', 'letícia',
+]
+
+const MALE_HINTS = [
+  'male', 'man', 'masculina', 'masculino', 'homem',
+  'antonio', 'antónio', 'daniel', 'felipe', 'ricardo', 'thiago', 'tiago',
+  'joao', 'joão', 'pedro', 'carlos', 'paulo', 'lucas', 'bruno', 'rafael',
+  'gustavo', 'marcelo', 'rodrigo', 'andre', 'andré', 'heitor', 'nicolas',
+  'nicolás', 'diego', 'felipe', 'gabriel', 'miguel', 'henrique',
+]
+
+/** Sinais de voz moderna / neural (2023–2026) */
+const MODERN_HINTS = [
+  'natural', 'neural', 'online (natural)', 'online natural',
+  'enhanced', 'premium', 'superstar', 'eloquent', 'personal',
+  'wavenet', 'studio', 'journey', 'polyglot', 'generative',
+]
 
 function loadRawSettings() {
   if (typeof window === 'undefined') return { ...DEFAULT_TEACHER_SETTINGS }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    // migra v1 (Web Speech) → v2 (Gemini Live)
-    const legacy = !raw ? localStorage.getItem('flashconcards.smartTeacher.v1') : null
-    const parsed = raw ? JSON.parse(raw) : legacy ? JSON.parse(legacy) : null
-    if (!parsed) return { ...DEFAULT_TEACHER_SETTINGS }
-    const gender = parsed.gender === 'male' ? 'male' : 'female'
-    const catalog = GEMINI_LIVE_VOICES[gender] || GEMINI_LIVE_VOICES.female
-    const voiceName = catalog.some((v) => v.id === parsed.voiceName)
-      ? parsed.voiceName
-      : defaultVoiceForGender(gender)
+    const raw =
+      localStorage.getItem(STORAGE_KEY) ||
+      localStorage.getItem('flashconcards.smartTeacher.v2') ||
+      localStorage.getItem('flashconcards.smartTeacher.v1')
+    if (!raw) return { ...DEFAULT_TEACHER_SETTINGS }
+    const parsed = JSON.parse(raw)
     return {
       ...DEFAULT_TEACHER_SETTINGS,
-      ...parsed,
-      gender,
-      voiceName,
-      speechRate: Number(parsed.speechRate) > 0 ? Number(parsed.speechRate) : 1,
+      gender: parsed.gender === 'male' ? 'male' : 'female',
+      voiceURI: typeof parsed.voiceURI === 'string' ? parsed.voiceURI : '',
+      thinkSeconds: Number(parsed.thinkSeconds) || 15,
+      speechRate: Number(parsed.speechRate) > 0 ? Number(parsed.speechRate) : 0.95,
+      autoAdvance: parsed.autoAdvance !== false,
     }
   } catch {
     return { ...DEFAULT_TEACHER_SETTINGS }
@@ -98,12 +86,9 @@ export function getTeacherSettings() {
 export function saveTeacherSettings(partial) {
   const current = loadRawSettings()
   const next = { ...current, ...partial }
-  if (partial?.gender && partial.gender !== current.gender && !partial.voiceName) {
-    next.voiceName = defaultVoiceForGender(partial.gender)
-  }
-  const catalog = GEMINI_LIVE_VOICES[next.gender] || GEMINI_LIVE_VOICES.female
-  if (!catalog.some((v) => v.id === next.voiceName)) {
-    next.voiceName = defaultVoiceForGender(next.gender)
+  if (partial?.gender && partial.gender !== current.gender && partial.voiceURI === undefined) {
+    // troca de gênero → limpa URI para escolher a melhor do novo gênero
+    next.voiceURI = ''
   }
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -111,22 +96,145 @@ export function saveTeacherSettings(partial) {
   return next
 }
 
-export function listGeminiVoices(gender = 'female') {
-  return GEMINI_LIVE_VOICES[gender] || GEMINI_LIVE_VOICES.female
-}
-
-export function resolveTeacherVoice(settings = getTeacherSettings()) {
-  const gender = settings.gender === 'male' ? 'male' : 'female'
-  const catalog = listGeminiVoices(gender)
-  const found = catalog.find((v) => v.id === settings.voiceName)
-  return found || catalog[0]
-}
-
 export function isSpeechSupported() {
-  return typeof window !== 'undefined' && typeof Audio !== 'undefined' && typeof fetch === 'function'
+  return typeof window !== 'undefined' && 'speechSynthesis' in window
 }
 
-/** Normaliza texto de estudo para leitura mais natural (concursos). */
+export function waitForVoices(timeoutMs = 3000) {
+  if (!isSpeechSupported()) return Promise.resolve([])
+
+  const existing = window.speechSynthesis.getVoices()
+  if (existing.length) return Promise.resolve(existing)
+
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      window.speechSynthesis.onvoiceschanged = null
+      resolve(window.speechSynthesis.getVoices() || [])
+    }
+    window.speechSynthesis.onvoiceschanged = finish
+    // Alguns browsers precisam de um getVoices “kick”
+    window.speechSynthesis.getVoices()
+    setTimeout(finish, timeoutMs)
+  })
+}
+
+function voiceKey(voice) {
+  return `${voice?.name || ''} ${voice?.voiceURI || ''}`.toLowerCase()
+}
+
+function isBlockedVoice(voice) {
+  const key = voiceKey(voice)
+  return BLOCKED_VOICE_HINTS.some((hint) => key.includes(hint))
+}
+
+function langScore(voice) {
+  const lang = (voice.lang || '').toLowerCase().replace('_', '-')
+  if (lang === 'pt-br' || lang.startsWith('pt-br')) return 120
+  if (lang.startsWith('pt')) return 80
+  return 0
+}
+
+function modernScore(voice) {
+  const key = voiceKey(voice)
+  let score = 0
+  for (const hint of MODERN_HINTS) {
+    if (key.includes(hint)) score += 40
+  }
+  // Microsoft Online Natural costuma ser a melhor opção gratuita no Edge/Windows
+  if (key.includes('microsoft') && key.includes('natural')) score += 50
+  if (key.includes('microsoft') && key.includes('online')) score += 25
+  if (key.includes('apple') && (key.includes('enhanced') || key.includes('premium'))) score += 45
+  if (key.includes('samsung') && key.includes('neural')) score += 30
+  // Vozes “online” do Edge soam bem mais atuais
+  if (voice.localService === false) score += 12
+  return score
+}
+
+function genderHits(voice) {
+  const key = voiceKey(voice)
+  const female = FEMALE_HINTS.filter((h) => key.includes(h)).length
+  const male = MALE_HINTS.filter((h) => key.includes(h)).length
+  return { female, male }
+}
+
+export function detectVoiceGender(voice) {
+  const { female, male } = genderHits(voice)
+  if (male > female) return 'male'
+  if (female > male) return 'female'
+  return 'unknown'
+}
+
+export function scoreVoiceForTeacher(voice, gender = 'female') {
+  if (!voice) return -Infinity
+  if (isBlockedVoice(voice)) return -2000
+  const lang = langScore(voice)
+  if (lang <= 0) return -1000
+
+  let score = lang + modernScore(voice)
+  const { female, male } = genderHits(voice)
+
+  if (gender === 'female') {
+    if (female > 0) score += 55 + female * 10
+    if (male > 0 && female === 0) score -= 80
+  } else {
+    if (male > 0) score += 55 + male * 10
+    if (female > 0 && male === 0) score -= 80
+  }
+
+  // Preferir nomes conhecidos modernos pt-BR
+  const key = voiceKey(voice)
+  if (gender === 'female' && (key.includes('francisca') || key.includes('thalita'))) score += 35
+  if (gender === 'male' && (key.includes('antonio') || key.includes('antónio') || key.includes('heitor'))) {
+    score += 35
+  }
+
+  return score
+}
+
+export function listTeacherVoices(voices, gender = 'female') {
+  const list = Array.isArray(voices) ? voices : []
+  const ranked = list
+    .map((voice) => ({ voice, score: scoreVoiceForTeacher(voice, gender), gender: detectVoiceGender(voice) }))
+    .filter((entry) => {
+      if (entry.score <= -500) return false
+      // Não misturar gêneros no seletor (corrige “masculina não aparece” / lista errada)
+      if (gender === 'male' && entry.gender === 'female') return false
+      if (gender === 'female' && entry.gender === 'male') return false
+      return true
+    })
+    .sort((a, b) => b.score - a.score)
+
+  if (ranked.length) return ranked.map((entry) => entry.voice)
+
+  // Fallback: só vozes com sinal claro do gênero pedido
+  return list
+    .filter((v) => {
+      if (langScore(v) <= 0 || isBlockedVoice(v)) return false
+      const g = detectVoiceGender(v)
+      return g === gender || g === 'unknown'
+    })
+    .sort((a, b) => scoreVoiceForTeacher(b, gender) - scoreVoiceForTeacher(a, gender))
+}
+
+export function pickTeacherVoice(voices, gender = 'female', preferredURI = '') {
+  const list = Array.isArray(voices) ? voices : []
+  if (!list.length) return null
+
+  if (preferredURI) {
+    const exact = list.find((v) => v.voiceURI === preferredURI || v.name === preferredURI)
+    if (exact && !isBlockedVoice(exact)) return exact
+  }
+
+  const ranked = listTeacherVoices(list, gender)
+  if (ranked.length) return ranked[0]
+
+  const pt = list.find((v) => langScore(v) > 0 && !isBlockedVoice(v))
+  return pt || list.find((v) => !isBlockedVoice(v)) || list[0] || null
+}
+
 export function prepareSpeechText(raw = '') {
   let text = String(raw || '')
     .replace(/<br\s*\/?>/gi, '. ')
@@ -165,7 +273,7 @@ export function prepareSpeechText(raw = '') {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-function splitIntoChunks(text, maxLen = 700) {
+function splitIntoChunks(text) {
   const prepared = prepareSpeechText(text)
   if (!prepared) return []
 
@@ -177,14 +285,10 @@ function splitIntoChunks(text, maxLen = 700) {
   const chunks = []
   let buffer = ''
   for (const part of parts) {
-    if (!buffer) {
-      buffer = part
-      continue
-    }
-    if (`${buffer} ${part}`.length <= maxLen) {
-      buffer = `${buffer} ${part}`
+    if ((buffer + ' ' + part).trim().length < 200) {
+      buffer = `${buffer} ${part}`.trim()
     } else {
-      chunks.push(buffer)
+      if (buffer) chunks.push(buffer)
       buffer = part
     }
   }
@@ -298,188 +402,102 @@ export async function runThinkCountdown(seconds, { signal, onTick, shouldPause }
   onTick?.(0)
 }
 
-function base64ToUint8Array(base64) {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
-function parsePcmSampleRate(mimeType = '') {
-  const match = String(mimeType).match(/rate\s*=\s*(\d+)/i)
-  return match ? Number(match[1]) : 24000
-}
-
-/** Empacota PCM 16-bit mono em WAV para o <audio> do navegador. */
-export function pcmBase64ToWavBlob(base64, mimeType = 'audio/L16;rate=24000') {
-  const pcm = base64ToUint8Array(base64)
-  const sampleRate = parsePcmSampleRate(mimeType)
-  const numChannels = 1
-  const bitsPerSample = 16
-  const blockAlign = (numChannels * bitsPerSample) / 8
-  const byteRate = sampleRate * blockAlign
-  const dataSize = pcm.length
-  const buffer = new ArrayBuffer(44 + dataSize)
-  const view = new DataView(buffer)
-
-  const writeStr = (offset, str) => {
-    for (let i = 0; i < str.length; i += 1) view.setUint8(offset + i, str.charCodeAt(i))
-  }
-
-  writeStr(0, 'RIFF')
-  view.setUint32(4, 36 + dataSize, true)
-  writeStr(8, 'WAVE')
-  writeStr(12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, 1, true)
-  view.setUint16(22, numChannels, true)
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, byteRate, true)
-  view.setUint16(32, blockAlign, true)
-  view.setUint16(34, bitsPerSample, true)
-  writeStr(36, 'data')
-  view.setUint32(40, dataSize, true)
-
-  new Uint8Array(buffer, 44).set(pcm)
-  return new Blob([buffer], { type: 'audio/wav' })
-}
-
-function audioBlobFromTtsResponse({ audioBase64, mimeType }) {
-  const mime = String(mimeType || '')
-  if (mime.includes('wav') || mime.includes('mp3') || mime.includes('mpeg') || mime.includes('ogg')) {
-    return new Blob([base64ToUint8Array(audioBase64)], { type: mime.split(';')[0] || 'audio/wav' })
-  }
-  // Gemini TTS costuma devolver PCM cru
-  return pcmBase64ToWavBlob(audioBase64, mimeType)
-}
-
-let currentAudio = null
-let currentObjectUrl = null
-
-function clearCurrentAudio() {
-  if (currentAudio) {
-    try {
-      currentAudio.onended = null
-      currentAudio.onerror = null
-      currentAudio.pause()
-      currentAudio.removeAttribute('src')
-      currentAudio.load()
-    } catch {
-      /* ignore */
-    }
-  }
-  currentAudio = null
-  if (currentObjectUrl) {
-    try {
-      URL.revokeObjectURL(currentObjectUrl)
-    } catch {
-      /* ignore */
-    }
-  }
-  currentObjectUrl = null
-}
-
-async function fetchGeminiTtsChunk(text, { voiceName, signal } = {}) {
-  const response = await fetch('/api/gemini/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text,
-      voiceName,
-      styleHint:
-        'Leia em português do Brasil com a qualidade das vozes do Gemini Live. Tom de professor(a) persuasivo(a), belo, claro e pausado — nunca mecânico ou de assistente de voz barato.',
-    }),
-    signal,
-  })
-
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw new Error(data.error || `Falha no TTS Gemini (${response.status})`)
-  }
-  if (!data.audioBase64) {
-    throw new Error('TTS Gemini não retornou áudio')
-  }
-  return data
-}
-
-function playHtmlAudio(blob, { rate = 1, signal } = {}) {
-  return new Promise((resolve, reject) => {
-    clearCurrentAudio()
-    const url = URL.createObjectURL(blob)
-    currentObjectUrl = url
-    const audio = new Audio(url)
-    currentAudio = audio
-    audio.playbackRate = Math.min(1.5, Math.max(0.7, Number(rate) || 1))
-
-    const onAbort = () => {
-      clearCurrentAudio()
-      reject(new DOMException('Aborted', 'AbortError'))
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-
-    audio.onended = () => {
-      signal?.removeEventListener('abort', onAbort)
-      clearCurrentAudio()
-      resolve()
-    }
-    audio.onerror = () => {
-      signal?.removeEventListener('abort', onAbort)
-      clearCurrentAudio()
-      reject(new Error('Falha ao reproduzir áudio Gemini'))
-    }
-
-    audio.play().catch((err) => {
-      signal?.removeEventListener('abort', onAbort)
-      clearCurrentAudio()
-      reject(err)
-    })
-  })
-}
-
 /**
- * Lê texto com voz Gemini Live. Retorna Promise que resolve ao terminar.
+ * Lê texto com Web Speech gratuito (voz moderna do aparelho).
  */
-export async function speakText(text, options = {}) {
+export function speakText(text, options = {}) {
   const {
-    voiceName = getTeacherSettings().voiceName,
-    rate = getTeacherSettings().speechRate,
+    voice = null,
+    gender = 'female',
+    rate = 0.95,
+    pitch,
+    volume = 1,
     signal,
   } = options
 
   if (!isSpeechSupported()) {
-    throw new Error('Reprodução de áudio não suportada neste navegador')
+    return Promise.reject(new Error('Leitura de áudio não suportada neste navegador'))
   }
 
   const chunks = splitIntoChunks(text)
-  if (!chunks.length) return
+  if (!chunks.length) return Promise.resolve()
 
-  for (let i = 0; i < chunks.length; i += 1) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const tts = await fetchGeminiTtsChunk(chunks[i], { voiceName, signal })
-    const blob = audioBlobFromTtsResponse(tts)
-    await playHtmlAudio(blob, { rate, signal })
-    if (i < chunks.length - 1) {
-      await delay(180, signal)
+  const synth = window.speechSynthesis
+  const resolvedPitch =
+    typeof pitch === 'number' ? pitch : gender === 'female' ? 1.04 : 0.9
+
+  return (async () => {
+    let aborted = false
+    const onAbort = () => {
+      aborted = true
+      try {
+        synth.cancel()
+      } catch {
+        /* ignore */
+      }
     }
-  }
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+    try {
+      if (synth.paused) synth.resume()
+
+      for (let i = 0; i < chunks.length; i += 1) {
+        if (aborted || signal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError')
+        }
+
+        await new Promise((chunkResolve, chunkReject) => {
+          const utterance = new SpeechSynthesisUtterance(chunks[i])
+          utterance.lang = voice?.lang || 'pt-BR'
+          if (voice) utterance.voice = voice
+          utterance.rate = rate
+          utterance.pitch = resolvedPitch
+          utterance.volume = volume
+
+          utterance.onend = () => chunkResolve()
+          utterance.onerror = (event) => {
+            if (event?.error === 'interrupted' || event?.error === 'canceled') {
+              chunkReject(new DOMException('Aborted', 'AbortError'))
+              return
+            }
+            chunkReject(new Error(event?.error || 'Erro na síntese de voz'))
+          }
+
+          synth.speak(utterance)
+        })
+
+        if (i < chunks.length - 1) {
+          await delay(260, signal)
+        }
+      }
+    } finally {
+      signal?.removeEventListener('abort', onAbort)
+    }
+  })()
 }
 
 export function cancelSpeech() {
-  clearCurrentAudio()
+  if (!isSpeechSupported()) return
+  try {
+    window.speechSynthesis.cancel()
+  } catch {
+    /* ignore */
+  }
 }
 
 export function pauseSpeech() {
+  if (!isSpeechSupported()) return
   try {
-    currentAudio?.pause()
+    window.speechSynthesis.pause()
   } catch {
     /* ignore */
   }
 }
 
 export function resumeSpeech() {
+  if (!isSpeechSupported()) return
   try {
-    const p = currentAudio?.play()
-    if (p?.catch) p.catch(() => {})
+    window.speechSynthesis.resume()
   } catch {
     /* ignore */
   }
@@ -488,9 +506,7 @@ export function resumeSpeech() {
 export function buildFlashcardIntro(index, total, materia = '') {
   const n = index + 1
   const subject = prepareSpeechText(materia)
-  if (subject) {
-    return `Flashcard ${n} de ${total}. Assunto: ${subject}.`
-  }
+  if (subject) return `Flashcard ${n} de ${total}. Assunto: ${subject}.`
   return `Flashcard ${n} de ${total}.`
 }
 
@@ -505,14 +521,11 @@ export function buildMaterialIntro(title = '') {
   return 'Vamos estudar este material. Acompanhe com atenção.'
 }
 
-// Compat: APIs antigas do Web Speech — mantidas como no-op / stubs
-export function waitForVoices() {
-  return Promise.resolve(listGeminiVoices('female').concat(listGeminiVoices('male')))
-}
-
-export function pickTeacherVoice(_voices, gender = 'female') {
-  const settings = getTeacherSettings()
-  const g = gender || settings.gender
-  const voice = resolveTeacherVoice({ ...settings, gender: g })
-  return { name: voice.label, lang: 'pt-BR', voiceURI: voice.id, geminiVoice: voice.id }
+export function formatVoiceLabel(voice) {
+  if (!voice) return 'Voz do sistema'
+  const modern = modernScore(voice) >= 40
+  const gender = detectVoiceGender(voice)
+  const tag = modern ? 'moderna' : 'padrão'
+  const g = gender === 'male' ? '♂' : gender === 'female' ? '♀' : ''
+  return `${voice.name} ${g} · ${tag}`.trim()
 }

@@ -9,40 +9,62 @@ import {
 import {
   buildMaterialIntro,
   cancelSpeech,
+  formatVoiceLabel,
   getTeacherSettings,
   isSpeechSupported,
-  listGeminiVoices,
+  listTeacherVoices,
   pauseSpeech,
+  pickTeacherVoice,
   prepareSpeechText,
-  resolveTeacherVoice,
   resumeSpeech,
   saveTeacherSettings,
   speakText,
+  waitForVoices,
 } from '../services/teacherSpeechService'
 
 /**
- * Leitor de materiais com vozes Gemini Live (Modo Professor).
+ * Leitor de materiais — voz gratuita do aparelho (sem API Gemini).
  */
 const AudioReader = ({ text, title = '', className = '', showIntro = true }) => {
   const [isReading, setIsReading] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [isSupported] = useState(() => isSpeechSupported())
+  const [voices, setVoices] = useState([])
   const [settings, setSettings] = useState(() => getTeacherSettings())
   const [error, setError] = useState(null)
   const abortRef = useRef(null)
 
   useEffect(() => {
+    if (!isSupported) return undefined
+    let alive = true
+    waitForVoices().then((list) => {
+      if (!alive) return
+      setVoices(list)
+      const cfg = getTeacherSettings()
+      const best = pickTeacherVoice(list, cfg.gender, cfg.voiceURI)
+      if (best?.voiceURI && best.voiceURI !== cfg.voiceURI) {
+        setSettings(saveTeacherSettings({ voiceURI: best.voiceURI }))
+      }
+    })
     return () => {
+      alive = false
       if (abortRef.current) abortRef.current.abort()
       cancelSpeech()
     }
-  }, [])
+  }, [isSupported])
 
-  const selectedVoice = resolveTeacherVoice(settings)
-  const voiceOptions = listGeminiVoices(settings.gender)
+  const selectedVoice = pickTeacherVoice(voices, settings.gender, settings.voiceURI)
+  const availableVoices = listTeacherVoices(voices, settings.gender)
 
   const updateSettings = (partial) => {
-    setSettings(saveTeacherSettings(partial))
+    let next = saveTeacherSettings(partial)
+    if (partial?.gender && voices.length) {
+      const best = pickTeacherVoice(voices, next.gender, next.voiceURI)
+      if (best?.voiceURI && best.voiceURI !== next.voiceURI) {
+        next = saveTeacherSettings({ voiceURI: best.voiceURI })
+      }
+    }
+    setSettings(next)
   }
 
   const stopReading = () => {
@@ -67,15 +89,23 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
     setIsPaused(false)
 
     try {
+      let voiceList = voices
+      if (!voiceList.length) {
+        voiceList = await waitForVoices()
+        setVoices(voiceList)
+      }
+      const voice = pickTeacherVoice(voiceList, settings.gender, settings.voiceURI)
       if (showIntro) {
         await speakText(buildMaterialIntro(title), {
-          voiceName: settings.voiceName,
+          voice,
+          gender: settings.gender,
           rate: settings.speechRate,
           signal: controller.signal,
         })
       }
       await speakText(clean, {
-        voiceName: settings.voiceName,
+        voice,
+        gender: settings.gender,
         rate: settings.speechRate,
         signal: controller.signal,
       })
@@ -84,7 +114,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
     } catch (err) {
       if (err?.name === 'AbortError') return
       console.error('Erro na leitura:', err)
-      setError(err?.message || 'Falha na leitura Gemini')
+      setError(err?.message || 'Falha na leitura')
       setIsReading(false)
       setIsPaused(false)
     }
@@ -129,7 +159,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
               Modo Professor
             </p>
             <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-              Gemini Live · {selectedVoice?.label || settings.voiceName}
+              Grátis · {selectedVoice ? formatVoiceLabel(selectedVoice) : 'Voz do sistema'}
             </p>
           </div>
         </div>
@@ -168,7 +198,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => updateSettings({ gender: 'female' })}
+              onClick={() => updateSettings({ gender: 'female', voiceURI: '' })}
               className={`rounded-lg border px-2 py-1.5 text-xs font-semibold ${
                 settings.gender === 'female'
                   ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
@@ -179,7 +209,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
             </button>
             <button
               type="button"
-              onClick={() => updateSettings({ gender: 'male' })}
+              onClick={() => updateSettings({ gender: 'male', voiceURI: '' })}
               className={`rounded-lg border px-2 py-1.5 text-xs font-semibold ${
                 settings.gender === 'male'
                   ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
@@ -193,19 +223,26 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
-            Voz Gemini Live
+            Voz instalada
           </label>
-          <select
-            value={settings.voiceName}
-            onChange={(e) => updateSettings({ voiceName: e.target.value })}
-            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
-          >
-            {voiceOptions.map((voice) => (
-              <option key={voice.id} value={voice.id}>
-                {voice.label} — {voice.hint}
-              </option>
-            ))}
-          </select>
+          {availableVoices.length > 0 ? (
+            <select
+              value={settings.voiceURI || selectedVoice?.voiceURI || ''}
+              onChange={(e) => updateSettings({ voiceURI: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+            >
+              {availableVoices.map((voice) => (
+                <option key={voice.voiceURI || voice.name} value={voice.voiceURI || voice.name}>
+                  {formatVoiceLabel(voice)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-[11px] text-amber-700 dark:text-amber-300">
+              Nenhuma voz {settings.gender === 'male' ? 'masculina' : 'feminina'} pt-BR encontrada.
+              No Edge/Windows, instale vozes Natural (ex.: Antonio / Francisca).
+            </p>
+          )}
         </div>
 
         <div>
@@ -214,7 +251,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
           </label>
           <input
             type="range"
-            min="0.75"
+            min="0.7"
             max="1.25"
             step="0.05"
             value={settings.speechRate}
@@ -226,7 +263,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
       {isReading && (
         <div className="mt-2 text-xs text-indigo-600 dark:text-indigo-400">
-          {isPaused ? 'Pausado' : 'Lendo com voz Gemini Live…'}
+          {isPaused ? 'Pausado' : 'Lendo (grátis, sem API)…'}
         </div>
       )}
       {error && <div className="mt-2 text-xs text-red-500">{error}</div>}

@@ -179,6 +179,7 @@ const FlashcardList = ({
           settings={teacher.settings}
           updateSettings={teacher.updateSettings}
           selectedVoice={teacher.selectedVoice}
+          availableVoices={teacher.availableVoices}
           error={teacher.error}
           onPlay={teacher.play}
           onPause={teacher.pause}
