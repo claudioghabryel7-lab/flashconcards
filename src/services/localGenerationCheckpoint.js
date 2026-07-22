@@ -34,6 +34,12 @@ export const ASSET = {
 export const FLASHCARD_TARGET = 30
 export const FLASHCARD_BATCH_SIZE = 10
 
+/** Questões por tópico/nível — mesmo alvo da UI (QuestoesTopicoView). */
+export const QUESTOES_TARGET = 50
+export const QUESTOES_BATCH_SIZE = 10
+/** Mínimo para considerar o rascunho completo (evita “ok” com ~12 truncadas). */
+export const QUESTOES_MIN_COMPLETE = QUESTOES_TARGET - 10
+
 /** ID canônico (mesmo do aluno/edital). */
 function contentDocId(topicKey = '') {
   return (
@@ -429,7 +435,7 @@ export async function prepareQuestoesRun({
   jobId,
   nivel = 1,
   forceFresh = false,
-  minCount = 1,
+  minCount = QUESTOES_MIN_COMPLETE,
 }) {
   const key = `${sanitizeTopicKey(topicKey)}_nivel_${nivel}`
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.QUESTOES, { nivel })

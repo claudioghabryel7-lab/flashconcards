@@ -223,7 +223,7 @@ export function buildMentoradoQuestoesPrompt({
           ? 'avançada — pegadinhas da banca'
           : 'elite — cobrança máxima da banca neste cargo'
 
-  const qtd = Number(rest.quantidadeQuestoes) > 0 ? Number(rest.quantidadeQuestoes) : 12
+  const qtd = Number(rest.quantidadeQuestoes) > 0 ? Number(rest.quantidadeQuestoes) : 50
 
   return `${buildExamFidelityBlock({ ...exam, tipoProva: resolvedTipo })}
 Gere questões preditivas CONFIÁVEIS para o tópico do edital.
