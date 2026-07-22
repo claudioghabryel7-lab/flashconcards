@@ -18,12 +18,12 @@ export default function OnlineNowBadge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] text-emerald-300 ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-600/25 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] text-emerald-700 dark:border-emerald-500/20 dark:text-emerald-300 ${className}`}
       title="Alunos online agora"
     >
       <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75 dark:bg-emerald-400" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-400" />
       </span>
       <Users className="h-3 w-3" />
       {displayCount}

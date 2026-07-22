@@ -152,7 +152,7 @@ const StudyPlanner = ({
             <div className="p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
               <CpuChipIcon className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-400" />
             </div>
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-100 dark:text-white break-words">Planejador de Estudos</h2>
+            <h2 className="break-words text-lg font-black text-cp-text sm:text-2xl md:text-3xl">Planejador de Estudos</h2>
             <div className="ml-auto flex-shrink-0">
               <button
                 onClick={resetEditalProgress}

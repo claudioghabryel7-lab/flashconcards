@@ -915,7 +915,7 @@ REGRAS:
                   {/* Bloqueio de acesso para conteúdo indisponível */}
                   {!isAdmin && questoes && !isContentAvailable(questoes.status, isAdmin) ? (
                     <div className="cp-card p-8 text-center">
-                      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
+                      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-600 dark:text-amber-400 mx-auto mb-3" />
                       <p className="font-medium text-cp-text">Questões em preparação</p>
                       <p className="mt-2 text-sm text-cp-muted">O administrador ainda não liberou este nível.</p>
                     </div>

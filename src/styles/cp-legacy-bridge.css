@@ -175,8 +175,44 @@
 
 .cp-legacy-root .bg-slate-800,
 .cp-legacy-root .bg-white,
-.cp-legacy-root .dark\:bg-slate-800 {
+.cp-legacy-root .dark\:bg-slate-800,
+.cp-legacy-root .bg-slate-800\/50,
+.cp-legacy-root .bg-slate-900\/50,
+.cp-legacy-root .dark\:bg-slate-900\/50 {
   background: var(--cp-surface) !important;
   color: var(--cp-text) !important;
   border: 1px solid var(--cp-border) !important;
+}
+
+/* Texto claro que sobrava após os painéis escuros virarem superfície clara */
+html:not(.dark) .cp-legacy-root .text-white,
+html:not(.dark) .cp-legacy-root .text-slate-50,
+html:not(.dark) .cp-legacy-root .text-slate-100,
+html:not(.dark) .cp-legacy-root .text-slate-200,
+html:not(.dark) .cp-legacy-root .text-zinc-50,
+html:not(.dark) .cp-legacy-root .text-zinc-100,
+html:not(.dark) .cp-legacy-root .text-zinc-200,
+html:not(.dark) .cp-legacy-root .dark\:text-white,
+html:not(.dark) .cp-legacy-root .dark\:text-slate-100 {
+  color: var(--cp-text) !important;
+}
+
+html:not(.dark) .cp-legacy-root .text-slate-300,
+html:not(.dark) .cp-legacy-root .text-slate-400,
+html:not(.dark) .cp-legacy-root .text-zinc-300,
+html:not(.dark) .cp-legacy-root .text-zinc-400,
+html:not(.dark) .cp-legacy-root .text-gray-300,
+html:not(.dark) .cp-legacy-root .text-gray-400 {
+  color: var(--cp-text-muted) !important;
+}
+
+/* CTAs coloridos no legado mantêm texto branco */
+html:not(.dark) .cp-legacy-root .cp-btn-primary,
+html:not(.dark) .cp-legacy-root .stark-button,
+html:not(.dark) .cp-legacy-root .bg-accent-orange,
+html:not(.dark) .cp-legacy-root [class*='from-accent-orange'],
+html:not(.dark) .cp-legacy-root [class*='from-accent-cyan'],
+html:not(.dark) .cp-legacy-root .bg-cp-accent,
+html:not(.dark) .cp-legacy-root [class*='bg-gradient-to'][class*='text-white'] {
+  color: #fff !important;
 }

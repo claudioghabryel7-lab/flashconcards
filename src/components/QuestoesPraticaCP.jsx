@@ -221,7 +221,7 @@ export function QuestaoAlternativas({
                   {key}
                 </span>
                 <span className="text-xs font-medium text-cp-muted">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                {reveal && isCorrect && <CheckCircleIcon className="h-5 w-5 text-emerald-400" />}
+                {reveal && isCorrect && <CheckCircleIcon className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />}
                 {reveal && isSelected && !isCorrect && <XCircleIcon className="h-5 w-5 text-red-400" />}
               </div>
             </button>
@@ -258,7 +258,7 @@ export function QuestaoAlternativas({
               </span>
               <span className="pt-1 text-sm leading-relaxed text-cp-text">{value}</span>
               {reveal && isCorrect && (
-                <CheckCircleIcon className="ml-auto h-5 w-5 shrink-0 text-emerald-400" />
+                <CheckCircleIcon className="ml-auto h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
               )}
               {reveal && isSelected && !isCorrect && (
                 <XCircleIcon className="ml-auto h-5 w-5 shrink-0 text-red-400" />
@@ -291,7 +291,7 @@ export function ResultadoDesempenho({ desempenho }) {
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-2xl border border-cp-border bg-cp-surface p-3 sm:p-4">
           <p className="font-mono text-[10px] uppercase text-cp-muted">Acertos</p>
-          <p className="mt-1 text-xl font-medium text-emerald-400 sm:text-2xl">{desempenho.acertos}</p>
+          <p className="mt-1 text-xl font-medium text-emerald-700 dark:text-emerald-400 sm:text-2xl">{desempenho.acertos}</p>
         </div>
         <div className="rounded-2xl border border-cp-border bg-cp-surface p-3 sm:p-4">
           <p className="font-mono text-[10px] uppercase text-cp-muted">Erros</p>

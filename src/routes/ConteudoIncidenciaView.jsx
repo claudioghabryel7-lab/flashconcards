@@ -491,7 +491,7 @@ const ConteudoIncidenciaView = () => {
             </div>
             <div className="cp-card p-4">
               <p className="font-mono text-[10px] uppercase text-cp-muted">Status</p>
-              <p className={`mt-1 text-sm font-medium ${conteudoGerado.status === CONTENT_STATUS.AVAILABLE ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <p className={`mt-1 text-sm font-medium ${conteudoGerado.status === CONTENT_STATUS.AVAILABLE ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
                 {conteudoGerado.status === CONTENT_STATUS.AVAILABLE ? 'Liberado' : 'Pendente'}
               </p>
             </div>
