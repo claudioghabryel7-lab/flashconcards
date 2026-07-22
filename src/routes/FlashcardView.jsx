@@ -1030,23 +1030,24 @@ IMPORTANTE:
   }
 
   return (
-    <div className="w-full max-w-full min-w-0 space-y-4 overflow-x-clip sm:space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-4 overflow-x-clip sm:space-y-5">
       {!isStudying && (
       <CPPageHeader
-        badge="Noji · SRS"
+        badge="Flashcards"
         title="Flashcards"
         subtitle={
           courseName
-            ? `${courseName} — biblioteca de decks com repetição espaçada`
-            : 'Biblioteca de decks com repetição espaçada'
+            ? `${courseName} — decks com repetição espaçada`
+            : 'Decks com repetição espaçada'
         }
         backHref="/dashboard"
+        backLabel="Voltar"
         actions={
           availableCourses.length > 1 ? (
             <select
               value={activeCourseId}
               onChange={(e) => setSelectedCourseId(e.target.value)}
-              className="rounded-xl border border-cp-border bg-cp-bg px-3 py-2 text-xs font-medium text-cp-text"
+              className="rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-xs font-medium text-cp-text"
             >
               {availableCourses.map((c) => (
                 <option key={c.id} value={c.id}>

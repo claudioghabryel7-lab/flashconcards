@@ -23,7 +23,6 @@ import {
 import { db } from '../firebase/config'
 import { formatDuration } from '../utils/trilhaTimerPersistence'
 import StudyTimeChart from '../components/StudyTimeChart'
-import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import toast from 'react-hot-toast'
 import { saveManualEntry, saveTimerSession, firestoreErrorMessage } from '../services/trilhaSaveService'
 import {
@@ -320,36 +319,30 @@ export default function Trilha() {
   }
 
   return (
-    <div className="space-y-8 pb-10">
-      <CPPageHeader
-        badge="Trilha"
-        title="Trilha de estudo"
-        subtitle="Cronômetro, lançamentos manuais e visão consolidada do seu desempenho por matéria e modalidade."
-      />
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="cp-card p-5">
-          <p className="text-xs text-cp-muted">Horas registradas</p>
-          <p className="mt-2 text-2xl font-semibold text-cp-text">{totalHours.toFixed(1)}h</p>
+    <div className="space-y-5 pb-6">
+      <div className="dash-rail !grid-cols-3">
+        <div className="dash-rail-item dash-tile--violet !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Horas</p>
+          <p className="text-lg font-semibold text-cp-text">{totalHours.toFixed(1)}h</p>
         </div>
-        <div className="cp-card p-5">
-          <p className="text-xs text-cp-muted">Blocos salvos</p>
-          <p className="mt-2 text-2xl font-semibold text-cp-text">{courseRows.length}</p>
+        <div className="dash-rail-item dash-tile--cyan !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Blocos</p>
+          <p className="text-lg font-semibold text-cp-text">{courseRows.length}</p>
         </div>
-        <div className="cp-card p-5">
-          <p className="text-xs text-cp-muted">Questões resolvidas</p>
-          <p className="mt-2 text-2xl font-semibold text-cp-text">{questionStats.total}</p>
-          <p className="mt-1 text-xs text-cp-muted">
-            {questionStats.correct} acertos · {questionStats.wrong} erros
+        <div className="dash-rail-item dash-tile--amber !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Questões</p>
+          <p className="text-lg font-semibold text-cp-text">{questionStats.total}</p>
+          <p className="text-[10px] text-cp-muted">
+            {questionStats.correct}✓ · {questionStats.wrong}✗
           </p>
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="cp-card p-6">
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="cp-card p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <ClockIcon className="h-5 w-5 text-cp-accent" />
-            <h2 className="text-lg font-semibold text-cp-text">Cronômetro de horas</h2>
+            <h2 className="text-base font-semibold text-cp-text sm:text-lg">Cronômetro</h2>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">

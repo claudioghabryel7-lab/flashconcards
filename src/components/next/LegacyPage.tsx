@@ -67,14 +67,14 @@ export default function LegacyPage({
   if (requireCourseSelection && profile && profile.selectedCourseId === undefined) return null
 
   return (
-    <div className="cp-legacy-root max-w-full min-w-0 overflow-x-clip pb-8">
+    <div className="cp-legacy-root dash-tech-shell max-w-full min-w-0 overflow-x-clip pb-10">
       {meta && (
         <CPPageHeader
           badge={meta.badge}
           title={meta.title}
           subtitle={meta.subtitle}
           backHref={meta.backHref === null ? null : (meta.backHref ?? '/dashboard')}
-          backLabel={meta.backLabel ?? 'Voltar ao Dashboard'}
+          backLabel={meta.backLabel ?? 'Voltar'}
         />
       )}
       <Component />

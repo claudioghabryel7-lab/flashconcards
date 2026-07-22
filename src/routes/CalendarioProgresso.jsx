@@ -170,83 +170,44 @@ const CalendarioProgresso = () => {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando calendário...</p>
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="mt-4 text-sm text-cp-muted">Carregando calendário…</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      {/* Gráficos de progresso por matéria — principal */}
+    <div className="space-y-5 pb-6">
       <ProgressChartsPanel
         user={user}
         courseId={profile?.selectedCourseId || 'alego-default'}
       />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Dias Estudados</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                {studyDates.length}
-              </p>
-            </div>
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-              <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-          </div>
+      <div className="dash-rail !grid-cols-3">
+        <div className="dash-rail-item dash-tile--cyan !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Dias</p>
+          <p className="text-lg font-semibold text-cp-text">{studyDates.length}</p>
         </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Streak Atual</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                {currentStreak} dias
-              </p>
-            </div>
-            <div className="p-3 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
-              <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-              </svg>
-            </div>
-          </div>
+        <div className="dash-rail-item dash-tile--amber !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Streak</p>
+          <p className="text-lg font-semibold text-cp-text">{currentStreak}d</p>
         </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Taxa de Estudo</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                {studyDates.length > 0 ? Math.round((studyDates.length / 28) * 100) : 0}%
-              </p>
-            </div>
-            <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
-              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-          </div>
+        <div className="dash-rail-item dash-tile--success !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+          <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Taxa</p>
+          <p className="text-lg font-semibold text-cp-text">
+            {studyDates.length > 0 ? Math.round((studyDates.length / 28) * 100) : 0}%
+          </p>
         </div>
       </div>
 
-      {/* Gráfico do edital */}
       <EditalProgressChart courseId={profile?.selectedCourseId} />
 
-      {/* Calendar */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-        <div className="mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2">
-            Calendário de Estudos
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            Clique nos dias para marcar como estudado {saving && '(salvando...)'}
+      <div className="cp-card p-3 sm:p-5">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-cp-text sm:text-lg">Calendário</h2>
+          <p className="mt-1 text-xs text-cp-muted">
+            Toque no dia para marcar estudo {saving ? '(salvando…)' : ''}
           </p>
         </div>
 
@@ -256,31 +217,6 @@ const CalendarioProgresso = () => {
           bySubject={studyBySubject}
           onMarkDay={handleMarkDay}
         />
-      </div>
-
-      {/* Instructions */}
-      <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
-        <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
-          Como usar o Calendário
-        </h3>
-        <ul className="space-y-2 text-blue-800 dark:text-blue-200">
-          <li className="flex items-start">
-            <span className="mr-2">•</span>
-            <span>Clique em qualquer dia para marcá-lo como estudado</span>
-          </li>
-          <li className="flex items-start">
-            <span className="mr-2">•</span>
-            <span>Dias marcados em verde indicam que você estudou</span>
-          </li>
-          <li className="flex items-start">
-            <span className="mr-2">•</span>
-            <span>Clique novamente para desmarcar um dia</span>
-          </li>
-          <li className="flex items-start">
-            <span className="mr-2">•</span>
-            <span>O calendário mostra os últimos 28 dias de estudo</span>
-          </li>
-        </ul>
       </div>
     </div>
   )

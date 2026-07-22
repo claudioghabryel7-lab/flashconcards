@@ -15,7 +15,6 @@ import { useAuth } from '../hooks/useAuth'
 import { useResolverQuestoes } from '../hooks/useResolverQuestoes'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import SubjectMetricChart from '../components/SubjectMetricChart'
-import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import {
   QuestaoEnunciadoCard,
   QuestaoAlternativas,
@@ -168,23 +167,14 @@ const ResolverQuestoesView = () => {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <CPPageHeader
-        badge="Questões"
-        title="Resolver Questões"
-        subtitle="Todas as questões liberadas pelo admin — pratique e acompanhe acertos e erros"
-        backHref="/dashboard"
-        backLabel="Voltar ao Dashboard"
-      />
-
+    <div className="space-y-5 pb-6">
       {/* Resumo + gráficos */}
-      <section className="cp-card p-4 sm:p-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="dash-focus !border-t-[2px] p-4 sm:p-5" style={{ borderTopColor: 'var(--cp-accent)' }}>
+        <div className="relative z-[1] mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <span className="cp-badge cp-badge-accent">Desempenho</span>
-            <h2 className="cp-headline mt-3 text-xl sm:text-2xl">Resolução de questões</h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-cp-muted">Desempenho</p>
             <p className="mt-1 text-sm text-cp-muted">
-              {totalQuestoes} questões disponíveis · {totalAnswered} resolvidas no total
+              {totalQuestoes} disponíveis · {totalAnswered} resolvidas
             </p>
           </div>
           <div className="flex rounded-lg border border-cp-border bg-cp-surface p-1">
@@ -206,12 +196,12 @@ const ResolverQuestoesView = () => {
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-cp-border bg-cp-surface/40 p-4 text-center">
+        <div className="relative z-[1] mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <div className="rounded-xl border border-cp-border bg-cp-surface/40 p-3 text-center sm:p-4">
             <p className="font-mono text-[10px] uppercase text-cp-muted">Disponíveis</p>
-            <p className="mt-1 text-2xl font-bold text-cp-text">{totalQuestoes}</p>
+            <p className="mt-1 text-xl font-bold text-cp-text sm:text-2xl">{totalQuestoes}</p>
           </div>
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-center sm:p-4">
             <p className="font-mono text-[10px] uppercase text-emerald-500">Acertos</p>
             <p className="mt-1 text-2xl font-bold text-emerald-500">{stats.correct || 0}</p>
           </div>
