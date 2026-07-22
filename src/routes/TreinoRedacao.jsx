@@ -827,11 +827,13 @@ CRÍTICO:
         </div>
       ) : (
       <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <span className="cp-badge cp-badge-accent">Redação</span>
-            <h1 className="cp-headline mt-3 text-xl sm:text-2xl">Treino de Redação</h1>
-            {courseName && <p className="mt-1 text-sm text-cp-muted">{courseName} · Banca {courseBanca}</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            {courseName ? (
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-cp-muted">
+                {courseName} · Banca {courseBanca}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -839,35 +841,35 @@ CRÍTICO:
             className="cp-btn-ghost !text-xs"
           >
             <ChartBarIcon className="h-4 w-4" />
-            Histórico e evolução
+            Histórico
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          <div className="cp-card p-3 sm:p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Tempo</p>
-            <p className={`mt-1 text-lg font-semibold sm:text-xl ${timeLeft < 600 ? 'text-red-500' : 'text-cp-text'}`}>
+        <div className="dash-rail !grid-cols-2 sm:!grid-cols-4">
+          <div className="dash-rail-item dash-tile--violet !min-h-0 !cursor-default !items-start !px-3 !py-3 hover:!transform-none hover:!shadow-none">
+            <p className="font-mono text-[9px] uppercase text-cp-muted">Tempo</p>
+            <p className={`text-lg font-semibold ${timeLeft < 600 ? 'text-red-500' : 'text-cp-text'}`}>
               {formatTime(timeLeft)}
             </p>
             <button
               type="button"
               onClick={() => setIsRunning(!isRunning)}
-              className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full border border-cp-border px-3 py-2 text-xs font-medium text-cp-text transition hover:border-cp-accent/30 hover:bg-cp-surface"
+              className="mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-cp-border px-2 py-1.5 text-[10px] font-medium text-cp-text transition hover:border-cp-accent/30"
             >
-              {isRunning ? <><PauseIcon className="h-4 w-4" /> Pausar</> : <><PlayIcon className="h-4 w-4" /> Iniciar</>}
+              {isRunning ? <><PauseIcon className="h-3.5 w-3.5" /> Pausar</> : <><PlayIcon className="h-3.5 w-3.5" /> Iniciar</>}
             </button>
           </div>
-          <div className="cp-card p-3 sm:p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
-            <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{wordCount}</p>
+          <div className="dash-rail-item dash-tile--cyan !min-h-0 !cursor-default !items-start !px-3 !py-3 hover:!transform-none hover:!shadow-none">
+            <p className="font-mono text-[9px] uppercase text-cp-muted">Palavras</p>
+            <p className="text-lg font-semibold text-cp-text">{wordCount}</p>
           </div>
-          <div className="cp-card p-3 sm:p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
-            <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{paragraphCount}</p>
+          <div className="dash-rail-item dash-tile--amber !min-h-0 !cursor-default !items-start !px-3 !py-3 hover:!transform-none hover:!shadow-none">
+            <p className="font-mono text-[9px] uppercase text-cp-muted">Parágrafos</p>
+            <p className="text-lg font-semibold text-cp-text">{paragraphCount}</p>
           </div>
-          <div className="cp-card p-3 sm:p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
-            <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{lines}</p>
+          <div className="dash-rail-item dash-tile--pink !min-h-0 !cursor-default !items-start !px-3 !py-3 hover:!transform-none hover:!shadow-none">
+            <p className="font-mono text-[9px] uppercase text-cp-muted">Linhas</p>
+            <p className="text-lg font-semibold text-cp-text">{lines}</p>
           </div>
         </div>
 

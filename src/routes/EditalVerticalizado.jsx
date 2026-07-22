@@ -1470,11 +1470,7 @@ REGRAS IMPORTANTES:
   ]
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {courseName && (
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
-      )}
-
+    <div className="space-y-4 sm:space-y-5">
       {!ownsCourse && !isAdmin && courseId && courseId !== 'alego-default' && (
         <div className="cp-card flex flex-col gap-3 border-cp-accent/25 bg-cp-accent/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1497,23 +1493,23 @@ REGRAS IMPORTANTES:
 
       {hasDisciplinas ? (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="cp-card p-4">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Disciplinas</p>
-              <p className="mt-1 text-lg font-medium text-cp-text sm:text-2xl">{editalStats.disciplinas}</p>
+          <div className="dash-rail !grid-cols-2 sm:!grid-cols-4">
+            <div className="dash-rail-item dash-tile--violet !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+              <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Disciplinas</p>
+              <p className="text-lg font-semibold text-cp-text">{editalStats.disciplinas}</p>
             </div>
-            <div className="cp-card p-4">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Tópicos</p>
-              <p className="mt-1 text-lg font-medium text-cp-text sm:text-2xl">{editalStats.totalTopicos}</p>
+            <div className="dash-rail-item dash-tile--cyan !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+              <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Tópicos</p>
+              <p className="text-lg font-semibold text-cp-text">{editalStats.totalTopicos}</p>
             </div>
-            <div className="cp-card p-4">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Estudados</p>
-              <p className="mt-1 text-lg font-medium text-cp-accent sm:text-2xl">{editalStats.estudados}</p>
+            <div className="dash-rail-item dash-tile--amber !min-h-0 !cursor-default !py-3 hover:!transform-none hover:!shadow-none">
+              <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Estudados</p>
+              <p className="text-lg font-semibold text-cp-accent">{editalStats.estudados}</p>
             </div>
-            <div className="cp-card p-4">
-              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Progresso</p>
-              <p className="mt-1 text-lg font-medium text-cp-accent2 sm:text-2xl">{editalStats.pct}%</p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cp-border">
+            <div className="dash-rail-item dash-tile--pink !min-h-0 !cursor-default !items-stretch !px-3 !py-3 hover:!transform-none hover:!shadow-none">
+              <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Progresso</p>
+              <p className="text-lg font-semibold text-cp-accent2">{editalStats.pct}%</p>
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-cp-border">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2 transition-all"
                   style={{ width: `${editalStats.pct}%` }}

@@ -403,10 +403,11 @@ const GuiaMentorado = () => {
   return (
     <div className="space-y-6">
       <CPPageHeader
-        badge="Cronograma"
+        badge="Guia"
         title="Guia Mentorado"
-        subtitle="Cronograma estratégico baseado no edital verticalizado"
+        subtitle="Cronograma até a prova, dia a dia."
         backHref="/dashboard"
+        backLabel="Voltar"
         actions={
           isAdmin ? (
             <>

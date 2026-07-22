@@ -201,78 +201,71 @@ const VesperaDeProva = () => {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando...</p>
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="mt-4 text-sm text-cp-muted">Carregando…</p>
         </div>
       </div>
     )
   }
   
   return (
-    <div className="space-y-6">
-      {courseName && (
-        <p className="text-text-secondary">{courseName}</p>
-      )}
+    <div className="space-y-5">
       {isAdmin && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim transition"
+            className="cp-btn-primary !text-sm"
           >
-            <SparklesIcon className="h-5 w-5" />
+            <SparklesIcon className="h-4 w-4" />
             Configurar
           </button>
           {generatedMaterial && (
             <button
               onClick={generateShareLink}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-bold hover:opacity-80 transition"
+              className="cp-btn-ghost !text-sm"
               title="Gerar link temporário de compartilhamento"
             >
-              <ShareIcon className="h-5 w-5" />
+              <ShareIcon className="h-4 w-4" />
               Compartilhar
             </button>
           )}
         </div>
       )}
 
-      {/* Barra de progresso */}
-        {generatedMaterial && user && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-text-primary">
-                Progresso de Leitura
-              </span>
-              <span className="text-sm text-text-secondary">
-                {Object.values(progresso).filter(v => v).length} / {generatedMaterial.material.length}
-              </span>
-            </div>
-            <div className="w-full bg-background-card-hover rounded-full h-2">
-              <div
-                className="bg-accent-cyan h-2 rounded-full transition-all"
-                style={{
-                  width: `${(Object.values(progresso).filter(v => v).length / generatedMaterial.material.length) * 100}%`
-                }}
-              />
-            </div>
+      {generatedMaterial && user && (
+        <div className="cp-card p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">
+              Progresso de leitura
+            </span>
+            <span className="text-xs text-cp-muted">
+              {Object.values(progresso).filter((v) => v).length} / {generatedMaterial.material.length}
+            </span>
           </div>
-        )}
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-cp-border">
+            <div
+              className="h-full rounded-full bg-cp-accent2 transition-all"
+              style={{
+                width: `${(Object.values(progresso).filter((v) => v).length / generatedMaterial.material.length) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
-      {/* Estado inicial - sem material gerado */}
       {!generatedMaterial && (
-        <div className="text-center py-16">
-          <SparklesIcon className="h-16 w-16 text-text-muted mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-text-primary mb-2">
-            Material de Revisão
-          </h2>
-          <p className="text-text-secondary mb-6 max-w-md mx-auto">
-            {isAdmin 
+        <div className="cp-card px-6 py-14 text-center">
+          <SparklesIcon className="mx-auto mb-4 h-12 w-12 text-cp-accent" />
+          <h2 className="cp-headline text-xl sm:text-2xl">Material de revisão</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-cp-muted">
+            {isAdmin
               ? 'Configure e gere o material de revisão personalizado para este concurso.'
               : 'O material de revisão ainda não foi gerado para este curso.'}
           </p>
           {isAdmin && (
             <button
               onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim transition"
+              className="cp-btn-primary mt-6"
             >
               <SparklesIcon className="h-5 w-5" />
               Configurar e Gerar
@@ -283,52 +276,51 @@ const VesperaDeProva = () => {
       
       {/* Material gerado - Visualização */}
       {generatedMaterial && (
-        <div className="space-y-8">
+        <div className="space-y-4">
           {generatedMaterial.material.map((disciplina, idx) => (
             <div
               key={idx}
-              className="bg-background-card rounded-2xl border border-border-primary overflow-hidden"
+              className="cp-card overflow-hidden !p-0"
             >
               {/* Header da disciplina */}
               <div
-                className="p-6 cursor-pointer hover:bg-background-card-hover transition-colors"
+                className="cursor-pointer p-4 transition-colors hover:bg-cp-surface/60 sm:p-5"
                 onClick={() => setMateriaExpandida(materiaExpandida === idx ? null : idx)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {/* Checkbox de progresso */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     {user && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
                           toggleMateriaLida(idx)
                         }}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                           progresso[idx]
-                            ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-border-primary hover:border-accent-cyan'
+                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                            : 'border-cp-border hover:border-cp-accent2'
                         }`}
                       >
-                        {progresso[idx] && <CheckIcon className="h-4 w-4" />}
+                        {progresso[idx] && <CheckIcon className="h-3.5 w-3.5" />}
                       </button>
                     )}
                     
-                    <div>
-                      <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
-                        <span className="text-accent-orange">0{idx + 1}.</span>
+                    <div className="min-w-0">
+                      <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-cp-text sm:text-lg">
+                        <span className="font-mono text-cp-accent">{String(idx + 1).padStart(2, '0')}.</span>
                         {disciplina.disciplina.toUpperCase()}
                       </h3>
-                      <p className="text-sm text-text-secondary mt-1">
+                      <p className="mt-0.5 text-xs text-cp-muted">
                         {disciplina.questoes?.length || 0} questões preditivas
                       </p>
                     </div>
                   </div>
                   
-                  <button className="p-2 rounded-lg hover:bg-background-card-hover">
+                  <button className="rounded-lg p-2 text-cp-muted hover:bg-cp-surface hover:text-cp-text">
                     {materiaExpandida === idx ? (
-                      <ChevronUpIcon className="h-5 w-5 text-text-secondary" />
+                      <ChevronUpIcon className="h-5 w-5" />
                     ) : (
-                      <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
+                      <ChevronDownIcon className="h-5 w-5" />
                     )}
                   </button>
                 </div>
@@ -336,26 +328,26 @@ const VesperaDeProva = () => {
               
               {/* Conteúdo da disciplina */}
               {materiaExpandida === idx && (
-                <div className="border-t border-border-primary p-6 space-y-8">
+                <div className="space-y-6 border-t border-cp-border p-4 sm:p-5">
                   {/* Raio-X de Probabilidade */}
                   {disciplina.raioX && (
-                    <div className="bg-accent-orange/10 rounded-xl p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <FireIcon className="h-6 w-6 text-accent-orange" />
-                        <h4 className="text-lg font-bold text-text-primary">
+                    <div className="rounded-xl border border-cp-accent4/25 bg-cp-accent4/10 p-4 sm:p-5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <FireIcon className="h-5 w-5 text-cp-accent4" />
+                        <h4 className="text-base font-semibold text-cp-text">
                           Raio-X de Probabilidade
                         </h4>
                       </div>
                       
                       <div className="space-y-4">
                         <div>
-                          <h5 className="text-sm font-semibold text-text-primary mb-2">
+                          <h5 className="text-sm font-semibold text-cp-text mb-2">
                             🔥 Top 3 Assuntos Quentes:
                           </h5>
                           <ul className="space-y-1">
                             {disciplina.raioX.topAssuntos?.map((assunto, aIdx) => (
-                              <li key={aIdx} className="text-sm text-text-secondary flex items-center gap-2">
-                                <span className="text-accent-orange font-bold">{aIdx + 1}.</span>
+                              <li key={aIdx} className="text-sm text-cp-muted flex items-center gap-2">
+                                <span className="text-cp-accent font-bold">{aIdx + 1}.</span>
                                 {assunto}
                               </li>
                             ))}
@@ -363,10 +355,10 @@ const VesperaDeProva = () => {
                         </div>
                         
                         <div>
-                          <h5 className="text-sm font-semibold text-text-primary mb-2">
+                          <h5 className="text-sm font-semibold text-cp-text mb-2">
                             📊 O Padrão da Banca:
                           </h5>
-                          <p className="text-sm text-text-secondary">
+                          <p className="text-sm text-cp-muted">
                             {disciplina.raioX.padraoBanca}
                           </p>
                         </div>
@@ -379,7 +371,7 @@ const VesperaDeProva = () => {
                     <div className="bg-accent-cyan/10 rounded-xl p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <LightBulbIcon className="h-6 w-6 text-accent-cyan" />
-                        <h4 className="text-lg font-bold text-text-primary">
+                        <h4 className="text-lg font-bold text-cp-text">
                           Revisão Turbo
                         </h4>
                       </div>
@@ -387,14 +379,14 @@ const VesperaDeProva = () => {
                       <div className="space-y-4">
                         {disciplina.revisaoTurbo.resumos?.length > 0 && (
                           <div>
-                            <h5 className="text-sm font-semibold text-text-primary mb-2">
+                            <h5 className="text-sm font-semibold text-cp-text mb-2">
                               ⚡ Resumos:
                             </h5>
                             <ul className="space-y-2">
                               {disciplina.revisaoTurbo.resumos.map((resumo, rIdx) => (
                                 <li 
                                   key={rIdx} 
-                                  className="text-sm text-text-secondary"
+                                  className="text-sm text-cp-muted"
                                   dangerouslySetInnerHTML={{ __html: resumo }}
                                 />
                               ))}
@@ -427,8 +419,8 @@ const VesperaDeProva = () => {
                   {disciplina.questoes?.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-4">
-                        <BookOpenIcon className="h-6 w-6 text-accent-orange" />
-                        <h4 className="text-lg font-bold text-text-primary">
+                        <BookOpenIcon className="h-6 w-6 text-cp-accent" />
+                        <h4 className="text-lg font-bold text-cp-text">
                           Questões Preditivas
                         </h4>
                       </div>
@@ -437,13 +429,13 @@ const VesperaDeProva = () => {
                         {disciplina.questoes.map((questao, qIdx) => (
                           <div
                             key={qIdx}
-                            className="bg-background-card-hover rounded-xl p-6"
+                            className="bg-cp-surface rounded-xl p-6"
                           >
                             <div className="mb-4">
-                              <span className="text-xs font-semibold text-accent-orange mb-2 block">
+                              <span className="text-xs font-semibold text-cp-accent mb-2 block">
                                 Aposta {qIdx + 1} de {disciplina.questoes.length}
                               </span>
-                              <p className="text-sm text-text-primary">
+                              <p className="text-sm text-cp-text">
                                 <span dangerouslySetInnerHTML={{ __html: questao.enunciado }} />
                               </p>
                             </div>
@@ -456,7 +448,7 @@ const VesperaDeProva = () => {
                                     className={`p-3 rounded-lg text-sm ${
                                       alt === questao.gabarito
                                         ? 'bg-green-500/20 border-2 border-green-500 text-green-400'
-                                        : 'bg-background-card border border-border-primary text-text-primary'
+                                        : 'bg-cp-bg-elevated border border-cp-border text-cp-text'
                                     }`}
                                   >
                                     {alt}
@@ -470,7 +462,7 @@ const VesperaDeProva = () => {
                                 <h5 className="text-sm font-semibold text-accent-cyan mb-2">
                                   💡 Gabarito Comentado:
                                 </h5>
-                                <p className="text-sm text-text-secondary">
+                                <p className="text-sm text-cp-muted">
                                   <span dangerouslySetInnerHTML={{ __html: questao.comentario }} />
                                 </p>
                               </div>
