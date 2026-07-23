@@ -1,10 +1,20 @@
 /**
- * Motor de fala do Modo Professor — GRATUITO (Web Speech API).
- * Não usa Gemini / não gasta API.
+ * Motor de fala do Modo Professor (Web Speech API).
  * Prioriza vozes Natural/Neural modernas; evita Assistente Google antigo.
  */
 
 const STORAGE_KEY = 'flashconcards.smartTeacher.v3'
+
+/** Faixa de velocidade do Modo Professor (1×–4×) em flashcards, questões e materiais. */
+export const SPEECH_RATE_MIN = 1
+export const SPEECH_RATE_MAX = 4
+export const SPEECH_RATE_STEP = 0.1
+
+export function clampSpeechRate(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return SPEECH_RATE_MIN
+  return Math.min(SPEECH_RATE_MAX, Math.max(SPEECH_RATE_MIN, n))
+}
 
 export const THINK_TIME_OPTIONS = [
   { value: 5, label: '5 segundos' },
@@ -20,7 +30,7 @@ export const DEFAULT_TEACHER_SETTINGS = {
   gender: 'female',
   voiceURI: '',
   thinkSeconds: 15,
-  speechRate: 0.95,
+  speechRate: 1,
   autoAdvance: true,
 }
 
@@ -71,7 +81,7 @@ function loadRawSettings() {
       gender: 'female',
       voiceURI: typeof parsed.voiceURI === 'string' ? parsed.voiceURI : '',
       thinkSeconds: Number(parsed.thinkSeconds) || 15,
-      speechRate: Number(parsed.speechRate) > 0 ? Number(parsed.speechRate) : 0.95,
+      speechRate: clampSpeechRate(parsed.speechRate),
       autoAdvance: parsed.autoAdvance !== false,
     }
   } catch {
@@ -86,6 +96,9 @@ export function getTeacherSettings() {
 export function saveTeacherSettings(partial) {
   const current = loadRawSettings()
   const next = { ...current, ...partial, gender: 'female' }
+  if (partial?.speechRate !== undefined) {
+    next.speechRate = clampSpeechRate(partial.speechRate)
+  }
   if (partial?.voiceURI === undefined && partial?.gender) {
     next.voiceURI = ''
   }
@@ -402,19 +415,20 @@ export async function runThinkCountdown(seconds, { signal, onTick, shouldPause }
 }
 
 /**
- * Lê texto com Web Speech gratuito (voz moderna do aparelho).
+ * Lê texto com Web Speech.
  * Pause robusto: cancela o pedaço atual, espera o unpause e relê o pedaço.
  */
 export function speakText(text, options = {}) {
   const {
     voice = null,
     gender = 'female',
-    rate = 0.95,
+    rate = SPEECH_RATE_MIN,
     pitch,
     volume = 1,
     signal,
     shouldPause,
   } = options
+  const safeRate = clampSpeechRate(rate)
 
   if (!isSpeechSupported()) {
     return Promise.reject(new Error('Leitura de áudio não suportada neste navegador'))
@@ -439,7 +453,7 @@ export function speakText(text, options = {}) {
       const utterance = new SpeechSynthesisUtterance(chunk)
       utterance.lang = voice?.lang || 'pt-BR'
       if (voice) utterance.voice = voice
-      utterance.rate = rate
+      utterance.rate = safeRate
       utterance.pitch = resolvedPitch
       utterance.volume = volume
 

@@ -18,7 +18,7 @@ import {
 } from '../services/teacherSpeechService'
 
 /**
- * Orquestra o Modo Professor (voz gratuita do aparelho).
+ * Orquestra o Modo Professor.
  */
 export function useSmartTeacher({
   cards = [],
@@ -148,7 +148,7 @@ export function useSmartTeacher({
   const runSessionFrom = useCallback(
     async (startIndex) => {
       if (!supported) {
-        setError('Seu navegador não suporta leitura de áudio gratuita.')
+        setError('Seu navegador não suporta leitura de áudio.')
         return
       }
 

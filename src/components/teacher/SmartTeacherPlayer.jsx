@@ -7,7 +7,7 @@ import {
   StopIcon,
   SpeakerWaveIcon,
 } from '@heroicons/react/24/outline'
-import { formatVoiceLabel, THINK_TIME_OPTIONS } from '../../services/teacherSpeechService'
+import { formatVoiceLabel, THINK_TIME_OPTIONS, SPEECH_RATE_MIN, SPEECH_RATE_MAX, SPEECH_RATE_STEP } from '../../services/teacherSpeechService'
 
 const PHASE_LABELS = {
   idle: 'Pronto para ensinar',
@@ -26,7 +26,7 @@ const PHASE_LABELS = {
 }
 
 /**
- * Painel do Modo Professor — voz gratuita do aparelho (sem gastar API Gemini).
+ * Painel do Modo Professor.
  */
 export default function SmartTeacherPlayer({
   supported,
@@ -65,11 +65,6 @@ export default function SmartTeacherPlayer({
             <AcademicCapIcon className="h-5 w-5 shrink-0 text-indigo-500" />
             <p className="text-sm font-semibold text-cp-text">Modo Professor</p>
           </div>
-          {!compact && (
-            <p className="mt-1 text-[11px] leading-relaxed text-cp-muted">
-              Voz gratuita do aparelho — prioriza Natural moderna. Não gasta API Gemini.
-            </p>
-          )}
         </div>
         <button
           type="button"
@@ -152,7 +147,7 @@ export default function SmartTeacherPlayer({
         <div className="mt-3 space-y-3 rounded-xl border border-cp-border bg-cp-bg/80 p-3">
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-cp-muted">
-              Voz feminina instalada
+              Voz
             </label>
             {availableVoices.length > 0 ? (
               <select
@@ -168,12 +163,9 @@ export default function SmartTeacherPlayer({
               </select>
             ) : (
               <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
-                Nenhuma voz feminina em português encontrada. No Edge/Windows, instale “Microsoft Francisca Online (Natural)”.
+                Nenhuma voz em português encontrada neste aparelho.
               </p>
             )}
-            <p className="mt-1.5 text-[10px] leading-relaxed text-cp-muted">
-              Voz gratuita do aparelho — prioriza Natural/Neural. Não gasta API Gemini.
-            </p>
           </div>
 
           <div>
@@ -199,13 +191,17 @@ export default function SmartTeacherPlayer({
             </label>
             <input
               type="range"
-              min="0.7"
-              max="1.25"
-              step="0.05"
+              min={SPEECH_RATE_MIN}
+              max={SPEECH_RATE_MAX}
+              step={SPEECH_RATE_STEP}
               value={settings.speechRate}
               onChange={(e) => updateSettings({ speechRate: Number(e.target.value) })}
               className="w-full"
             />
+            <div className="mt-1 flex justify-between text-[10px] text-cp-muted">
+              <span>{SPEECH_RATE_MIN}x</span>
+              <span>{SPEECH_RATE_MAX}x</span>
+            </div>
           </div>
 
           <label className="flex cursor-pointer items-center gap-2 text-xs text-cp-text">

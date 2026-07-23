@@ -20,10 +20,13 @@ import {
   saveTeacherSettings,
   speakText,
   waitForVoices,
+  SPEECH_RATE_MIN,
+  SPEECH_RATE_MAX,
+  SPEECH_RATE_STEP,
 } from '../services/teacherSpeechService'
 
 /**
- * Leitor de materiais — voz gratuita do aparelho (sem API Gemini).
+ * Leitor de materiais (Modo Professor).
  */
 const AudioReader = ({ text, title = '', className = '', showIntro = true }) => {
   const [isReading, setIsReading] = useState(false)
@@ -162,9 +165,11 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Modo Professor
             </p>
-            <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-              Grátis · {selectedVoice ? formatVoiceLabel(selectedVoice) : 'Voz do sistema'}
-            </p>
+            {selectedVoice && (
+              <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                {formatVoiceLabel(selectedVoice)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -199,7 +204,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
       <div className="space-y-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
-            Voz feminina instalada
+            Voz
           </label>
           {availableVoices.length > 0 ? (
             <select
@@ -215,7 +220,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
             </select>
           ) : (
             <p className="text-[11px] text-amber-700 dark:text-amber-300">
-              Nenhuma voz feminina pt-BR encontrada. No Edge, instale Francisca Online (Natural).
+              Nenhuma voz em português encontrada neste aparelho.
             </p>
           )}
         </div>
@@ -226,19 +231,23 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
           </label>
           <input
             type="range"
-            min="0.7"
-            max="1.25"
-            step="0.05"
+            min={SPEECH_RATE_MIN}
+            max={SPEECH_RATE_MAX}
+            step={SPEECH_RATE_STEP}
             value={settings.speechRate}
             onChange={(e) => updateSettings({ speechRate: parseFloat(e.target.value) })}
             className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 dark:bg-slate-600"
           />
+          <div className="mt-1 flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
+            <span>{SPEECH_RATE_MIN}x</span>
+            <span>{SPEECH_RATE_MAX}x</span>
+          </div>
         </div>
       </div>
 
       {isReading && (
         <div className="mt-2 text-xs text-indigo-600 dark:text-indigo-400">
-          {isPaused ? 'Pausado' : 'Lendo (grátis, sem API)…'}
+          {isPaused ? 'Pausado' : 'Lendo…'}
         </div>
       )}
       {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
