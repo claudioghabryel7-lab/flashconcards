@@ -155,7 +155,7 @@ function modernScore(voice) {
   for (const hint of MODERN_HINTS) {
     if (key.includes(hint)) score += 40
   }
-  // Microsoft Online Natural costuma ser a melhor opção gratuita no Edge/Windows
+  // Microsoft Online Natural costuma ser a melhor opção no Edge/Windows
   if (key.includes('microsoft') && key.includes('natural')) score += 50
   if (key.includes('microsoft') && key.includes('online')) score += 25
   if (key.includes('apple') && (key.includes('enhanced') || key.includes('premium'))) score += 45
