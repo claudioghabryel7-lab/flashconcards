@@ -138,6 +138,8 @@ VERACIDADE (obrigatório):
 - Use Google Search e confirme leis/artigos/decretos em fontes oficiais.
 - Não invente dispositivo legal. Fato não confirmado → omita.
 - Cite a base normativa no validacaoArtigo e no gabarito comentado.
+- CONSISTÊNCIA: o material NÃO pode contradizer flashcards/questões do mesmo tópico; use a doutrina majoritária e o texto legal vigente.
+- Se houver controvérsia, indique o entendimento majoritário da banca ${exam.banca} para o cargo ${exam.cargo}.
 
 Retorne APENAS JSON válido:
 {
@@ -242,6 +244,8 @@ OBRIGATÓRIO — VERACIDADE:
 2. NÃO invente número de lei, artigo ou Súmula. Se não confirmar → não use.
 3. Cada questão deve ter gabarito objetivamente correto e comentário citando a base legal.
 4. Prefira ${qtd} questões 100% corretas a muitas duvidosas.
+5. CONSISTÊNCIA: não contradiga o material/flashcards do mesmo tópico; gabaritos devem seguir o mesmo entendimento factual.
+6. Alinhe 100% ao concurso ${exam.concursoName}, cargo ${exam.cargo}, banca ${exam.banca} e edital.
 
 Retorne APENAS JSON válido:
 {

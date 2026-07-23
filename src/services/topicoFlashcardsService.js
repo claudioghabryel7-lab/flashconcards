@@ -17,6 +17,10 @@ import { startBackgroundGeneration } from './aiGenerationRunner'
 import { buildFlashcardsTopicoPayload } from '../utils/serverGenerationPayload'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { fetchTopicoPublishStatus } from './topicoPublishService'
+import {
+  buildExamAwareFlashcardMeta,
+  normalizeExamContext,
+} from '../utils/examFidelityContext'
 
 function topicKeyMatches(cardKey, targetKey) {
   if (!targetKey) return false
@@ -81,7 +85,7 @@ export async function fetchFlashcardsForTopico(
 }
 
 /**
- * Gera e salva flashcards para um único tópico (30 cards estratégicos, pipeline servidor).
+ * Gera e salva flashcards para um único tópico (≥50 cards, alinhados a banca/cargo/edital).
  */
 export async function generateAndSaveFlashcardsForTopico({
   courseId,
@@ -97,21 +101,28 @@ export async function generateAndSaveFlashcardsForTopico({
   const resolvedId = courseId || 'alego-default'
   const courseDoc = await getDoc(doc(db, 'courses', resolvedId))
   const courseData = courseDoc.exists() ? courseDoc.data() : {}
-  const banca = courseData.banca || ''
+  const examCtx = normalizeExamContext({
+    ...courseData,
+    courseName: courseName || courseData.name || courseData.competition || '',
+    concursoName: courseData.competition || courseData.name || courseName || '',
+    editalText,
+  })
 
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
   const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
 
-  const baseParams = {
-    courseId: resolvedId,
-    courseName: courseName || courseData.name || courseData.competition || '',
-    disciplina,
-    topicoNome,
-    topicoNumero,
-    modulo,
-    banca,
-    editalText,
-  }
+  const flashcardMeta = buildExamAwareFlashcardMeta(
+    {
+      courseId: resolvedId,
+      disciplina,
+      topicoNome,
+      topicoNumero,
+      topicKey: normalizedTopicKey,
+      modulo,
+      editalText,
+    },
+    examCtx,
+  )
 
   if (!userId) {
     throw new Error('Faça login como admin para gerar flashcards.')
@@ -128,10 +139,7 @@ export async function generateAndSaveFlashcardsForTopico({
       courseId: resolvedId,
       status: initialStatus,
       forceRegenerate: true,
-      flashcardMeta: {
-        ...baseParams,
-        topicKey: normalizedTopicKey,
-      },
+      flashcardMeta,
     }),
   })
 

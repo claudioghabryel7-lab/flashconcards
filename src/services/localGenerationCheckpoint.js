@@ -31,8 +31,11 @@ export const ASSET = {
   BUNDLE: 'bundle',
 }
 
-export const FLASHCARD_TARGET = 30
+/** Mínimo de flashcards por tópico — cobertura completa alinhada ao edital/banca/cargo. */
+export const FLASHCARD_TARGET = 50
 export const FLASHCARD_BATCH_SIZE = 10
+/** Aceita checkpoint completo com pequena folga de qualidade (ex.: 48/50). */
+export const FLASHCARD_MIN_COMPLETE = FLASHCARD_TARGET - 2
 
 /** Questões por tópico/nível — mesmo alvo da UI (QuestoesTopicoView). */
 export const QUESTOES_TARGET = 50
@@ -181,7 +184,7 @@ export async function prepareFlashcardsRun({
 
   if (cp?.complete) {
     const saved = await loadFlashcardsByTopicKey(courseId, topicKey)
-    if (saved.length >= FLASHCARD_TARGET - 2) {
+    if (saved.length >= FLASHCARD_MIN_COMPLETE) {
       return {
         resume: true,
         alreadyComplete: true,
@@ -209,7 +212,7 @@ export async function prepareFlashcardsRun({
     })
     return {
       resume: true,
-      alreadyComplete: usable.length >= FLASHCARD_TARGET - 2,
+      alreadyComplete: usable.length >= FLASHCARD_MIN_COMPLETE,
       existingItems: usable.map(cardFromDoc),
       existingIds: usable.map((c) => c.id),
       startBatch,

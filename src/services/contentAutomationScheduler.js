@@ -369,7 +369,9 @@ async function startIncidenciaJob(adminUserId, gap) {
       courseMeta: {
         banca: meta.banca,
         cargo: meta.cargo,
+        concursoName: meta.concursoName,
         courseName: meta.courseName,
+        nivelCurso: meta.nivelCurso || meta.nivel || '',
         editalText: meta.editalText,
       },
       aiOptions: {

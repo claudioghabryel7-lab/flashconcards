@@ -2,6 +2,8 @@
  * Prompts para automação global de conteúdo (matéria revisada + incidência).
  */
 
+import { buildExamFidelityBlock, normalizeExamContext } from './examFidelityContext'
+
 export function buildMateriaRevisadaAutomationPrompt({
   materia,
   courseName = 'Curso Preparatório',
@@ -62,7 +64,9 @@ const INCIDENCIA_REVISAO_RULES = `INSTRUÇÕES DA REVISÃO (OBRIGATÓRIO):
 3. Ordene da maior para a menor probabilidade
 4. Para CADA assunto, escreva uma REVISÃO COMPLETA e DIRETA (mínimo ~120 palavras): o que estudar, artigos/leis/súmulas quando couber, pegadinhas da banca, e por que cai
 5. NÃO corte a revisão no meio. NÃO use reticências "..." no lugar do conteúdo
-6. NÃO deixe o campo "revisao" curto ou vazio`
+6. NÃO deixe o campo "revisao" curto ou vazio
+7. Alinhe 100% ao concurso, cargo, banca e edital informados — incidência genérica de outro cargo/banca é inválida
+8. Priorize o que ESSA banca cobra PARA ESSE cargo; marque pegadinhas típicas dessa banca`
 
 /**
  * Prompt de incidência para disciplina inteira (só use se poucos tópicos).
@@ -72,11 +76,20 @@ export function buildIncidenciaAutomationPrompt({
   topicos = [],
   banca = '',
   cargo = '',
+  concursoName = '',
   courseName = 'Curso Preparatório',
+  nivelCurso = '',
   editalText = '',
 }) {
   const topicosBlock = formatTopicosBlock(topicos)
   const edital = String(editalText || '').slice(0, 40000)
+  const examCtx = normalizeExamContext({
+    banca,
+    cargo,
+    concursoName: concursoName || courseName,
+    courseName,
+    nivel: nivelCurso,
+  })
 
   return `DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -86,10 +99,13 @@ export function buildIncidenciaAutomationPrompt({
 
 Você é especialista em incidência de prova para concursos.
 
+${buildExamFidelityBlock(examCtx)}
+
 CURSO: ${courseName}
 DISCIPLINA: ${disciplinaNome}
-BANCA: ${banca || 'NÃO DEFINIDA'}
-CARGO: ${cargo || 'NÃO DEFINIDO'}
+BANCA: ${examCtx.banca || 'NÃO DEFINIDA'}
+CARGO: ${examCtx.cargo || 'NÃO DEFINIDO'}
+CONCURSO: ${examCtx.concursoName || 'NÃO DEFINIDO'}
 
 TÓPICOS DA DISCIPLINA:
 ${topicosBlock || '(usar edital abaixo)'}
@@ -98,7 +114,7 @@ EDITAL BASE:
 ${edital}${String(editalText || '').length > 40000 ? '\n\n[texto truncado...]' : ''}
 
 TAREFA:
-Gere um conteúdo de revisão de incidência focado no que REALMENTE tende a cair.
+Gere um conteúdo de revisão de incidência focado no que REALMENTE tende a cair neste concurso/cargo/banca.
 Cubra TODOS os tópicos listados — nenhum pode faltar.
 
 ${INCIDENCIA_REVISAO_RULES}
@@ -106,8 +122,8 @@ ${INCIDENCIA_REVISAO_RULES}
 JSON:
 {
   "disciplina": "${disciplinaNome}",
-  "banca": "${banca || 'NÃO DEFINIDA'}",
-  "cargo": "${cargo || 'NÃO DEFINIDO'}",
+  "banca": "${examCtx.banca || 'NÃO DEFINIDA'}",
+  "cargo": "${examCtx.cargo || 'NÃO DEFINIDO'}",
   "curso": "${courseName}",
   "analisePorTopico": [
     {
@@ -135,13 +151,22 @@ export function buildIncidenciaBatchPrompt({
   topicos = [],
   banca = '',
   cargo = '',
+  concursoName = '',
   courseName = 'Curso Preparatório',
+  nivelCurso = '',
   editalText = '',
   batchIndex = 1,
   batchTotal = 1,
 }) {
   const topicosBlock = formatTopicosBlock(topicos)
   const edital = String(editalText || '').slice(0, 35000)
+  const examCtx = normalizeExamContext({
+    banca,
+    cargo,
+    concursoName: concursoName || courseName,
+    courseName,
+    nivel: nivelCurso,
+  })
 
   return `DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -152,9 +177,12 @@ export function buildIncidenciaBatchPrompt({
 Você é especialista em incidência de prova para concursos.
 Este é o LOTE ${batchIndex}/${batchTotal} da disciplina "${disciplinaNome}".
 
+${buildExamFidelityBlock(examCtx)}
+
 CURSO: ${courseName}
-BANCA: ${banca || 'NÃO DEFINIDA'}
-CARGO: ${cargo || 'NÃO DEFINIDO'}
+BANCA: ${examCtx.banca || 'NÃO DEFINIDA'}
+CARGO: ${examCtx.cargo || 'NÃO DEFINIDO'}
+CONCURSO: ${examCtx.concursoName || 'NÃO DEFINIDO'}
 
 TÓPICOS DESTE LOTE (gere SOMENTE estes):
 ${topicosBlock}
@@ -187,9 +215,18 @@ export function buildIncidenciaResumoPrompt({
   disciplinaNome,
   banca = '',
   cargo = '',
+  concursoName = '',
   courseName = 'Curso Preparatório',
+  nivelCurso = '',
   analisePorTopico = [],
 }) {
+  const examCtx = normalizeExamContext({
+    banca,
+    cargo,
+    concursoName: concursoName || courseName,
+    courseName,
+    nivel: nivelCurso,
+  })
   const preview = (analisePorTopico || [])
     .slice(0, 40)
     .map((t) => {
@@ -201,7 +238,9 @@ export function buildIncidenciaResumoPrompt({
     })
     .join('\n')
 
-  return `Com base na análise de incidência da disciplina "${disciplinaNome}" (${courseName}, banca ${banca || 'N/D'}, cargo ${cargo || 'N/D'}), gere o RESUMO GERAL.
+  return `${buildExamFidelityBlock(examCtx)}
+
+Com base na análise de incidência da disciplina "${disciplinaNome}" (${courseName}, concurso ${examCtx.concursoName || 'N/D'}, banca ${examCtx.banca || 'N/D'}, cargo ${examCtx.cargo || 'N/D'}), gere o RESUMO GERAL alinhado a esse concurso/cargo/banca.
 
 ASSUNTOS JÁ MAPEADOS:
 ${preview || '(sem preview)'}

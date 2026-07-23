@@ -33,6 +33,7 @@ import dayjs from 'dayjs'
 import {
   FLASHCARD_TARGET,
   FLASHCARD_BATCH_SIZE,
+  FLASHCARD_MIN_COMPLETE,
   QUESTOES_TARGET,
   QUESTOES_BATCH_SIZE,
   QUESTOES_MIN_COMPLETE,
@@ -413,7 +414,7 @@ async function processFlashcardsTopico(
   let allCards = dedupeCards((prep.existingItems || []).map(normalizeCard))
   let allIds = [...(prep.existingIds || [])]
 
-  if (prep.alreadyComplete && allCards.length >= FLASHCARD_TARGET - 2) {
+  if (prep.alreadyComplete && allCards.length >= FLASHCARD_MIN_COMPLETE) {
     await updateProgress(90, `Flashcards já no checkpoint (${allCards.length}) — pulando API`)
     await finalizeFlashcardsCheckpoint({
       courseId,
@@ -465,7 +466,26 @@ async function processFlashcardsTopico(
           .join('\n')}`
       : ''
 
+    const priorPairs = allCards
+      .slice(-12)
+      .map((c) => {
+        const q = String(c.pergunta || c.frente || '').slice(0, 120)
+        const r = String(c.resposta || c.verso || '').slice(0, 160)
+        return q && r ? `- Q: ${q} → R: ${r}` : null
+      })
+      .filter(Boolean)
+    const consistencyBlock = priorPairs.length
+      ? `\nCONSISTÊNCIA COM CARDS JÁ GERADOS (NÃO CONTRADIGA):\n${priorPairs.join('\n')}`
+      : ''
+
     const topicoNome = meta.topicoNome || meta.topicKey || ''
+    const coverageHint =
+      batchNum === 1
+        ? 'Comece pelos núcleos cobráveis do tópico (conceitos-chave, artigos, prazos, competências, exceções).'
+        : batchNum === batchCount
+          ? 'Feche lacunas: exceções, pegadinhas da banca, distinções e detalhes finos ainda não cobertos.'
+          : 'Continue a cobertura sistemática do tópico — subtemas ainda não abordados nas frentes acima.'
+
     const promptCore = `${buildExamFidelityBlock(examCtx)}
 ${basePrompt}
 
@@ -476,15 +496,19 @@ MÓDULO: ${meta.modulo || ''}
 ${buildExamFidelityInline(examCtx)}
 
 TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCount} de ${FLASHCARD_TARGET} total).
+META DO TÓPICO: ${FLASHCARD_TARGET} cards que, juntos, cubram TODO o tópico do edital — sem lacunas graves.
+${coverageHint}
 
 REGRAS DE OURO (violação = card inválido):
 1. CADA card DEVE ser 100% sobre o TÓPICO EXATO acima — nada de assuntos vizinhos ou genéricos da disciplina.
-2. Perguntas no estilo da banca ${examCtx.banca} para o cargo ${examCtx.cargo} (${examCtx.concursoName}).
+2. Alinhe 100% ao CONCURSO, CARGO, BANCA e EDITAL (${examCtx.concursoName} / ${examCtx.cargo} / ${examCtx.banca}).
 3. Use Google Search. Confirme leis/artigos. Fato não confirmado → omita. Dúvida factual → NÃO inclua.
 4. PROIBIDO: "O que é X?" com definição vaga; curiosidades; conteúdo óbvio; misturar outro tópico.
-5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova.
-6. Prefira menos cards corretos a muitos duvidosos.
+5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova (estilo ${examCtx.banca}, nível ${examCtx.nivelCurso || 'do cargo'}).
+6. NUNCA contradiga outro flashcard deste tópico (sim/não, certo/errado, números, artigos).
+7. Prefira fato confirmado a card duvidoso — mas o alvo do tópico continua sendo ${FLASHCARD_TARGET} cards corretos.
 ${existingList}
+${consistencyBlock}
 
 Retorne APENAS JSON:
 { "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
@@ -506,9 +530,9 @@ Retorne APENAS JSON:
           : `${prompt}
 
 ═══ REGENERAÇÃO ${attempt}/3 ═══
-O lote anterior foi REJEITADO (vazio/genérico/curto/dúvida factual).
+O lote anterior foi REJEITADO (vazio/genérico/curto/dúvida factual/contradição).
 Gere de novo: 100% no TÓPICO EXATO, verso técnico, confirme com Google Search.
-Prefira menos cards corretos a cards duvidosos.`,
+NÃO contradiga cards já gerados. Prefira menos cards corretos a cards duvidosos.`,
         {
           courseId,
           ...buildTrustedOptions(disciplina, {
@@ -532,7 +556,11 @@ Prefira menos cards corretos a cards duvidosos.`,
       ).filter((c) => c.pergunta && c.resposta)
 
       try {
-        batchCards = validateFlashcardBatchOrThrow(rawBatch, { topicoNome, disciplina }, { minKeep })
+        batchCards = validateFlashcardBatchOrThrow(
+          rawBatch,
+          { topicoNome, disciplina, priorCards: allCards },
+          { minKeep },
+        )
         break
       } catch (qualityErr) {
         if (attempt >= 3) throw qualityErr
@@ -569,9 +597,9 @@ Prefira menos cards corretos a cards duvidosos.`,
   }
 
   allCards = allCards.slice(0, FLASHCARD_TARGET)
-  if (allCards.length < Math.max(5, FLASHCARD_TARGET - 10)) {
+  if (allCards.length < FLASHCARD_MIN_COMPLETE) {
     const err = new Error(
-      `Flashcards insuficientes: ${allCards.length} (alvo ~${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
+      `Flashcards insuficientes: ${allCards.length} (alvo ${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
     )
     err.code = 'flashcards_invalid'
     throw err
@@ -1643,7 +1671,9 @@ async function processConteudoIncidencia(courseId, serverPayload, updateProgress
     topicos,
     banca: meta.banca || savePlan.banca || '',
     cargo: meta.cargo || savePlan.cargo || '',
+    concursoName: meta.concursoName || meta.competition || meta.courseName || savePlan.courseName || '',
     courseName: meta.courseName || savePlan.courseName || 'Curso Preparatório',
+    nivelCurso: meta.nivelCurso || meta.nivel || '',
     editalText: meta.editalText || serverPayload?.editalText || '',
     courseId,
     generateFn: generateAiJson,

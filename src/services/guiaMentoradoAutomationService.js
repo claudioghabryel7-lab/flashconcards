@@ -239,7 +239,9 @@ export async function prepareMentoradoDayAutomation({
       courseMeta: {
         banca: baseContext.banca || '',
         cargo: baseContext.cargo || '',
+        concursoName: baseContext.concursoName || baseContext.courseName || '',
         courseName: baseContext.courseName || '',
+        nivelCurso: baseContext.nivelCurso || '',
         editalText: baseContext.editalText || '',
       },
     }

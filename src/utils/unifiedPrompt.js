@@ -811,7 +811,7 @@ Retorne APENAS JSON válido com esta estrutura:
   ]
 }
 
-QUANTIDADE: Mínimo 15 flashcards de alta qualidade.`
+QUANTIDADE: Exatamente 50 flashcards de alta qualidade, cobrindo TODO o tópico (sem lacunas).`
   }
   
   // Fallback para o sistema atual
@@ -906,7 +906,7 @@ Retorne APENAS JSON válido com esta estrutura:
   ]
 }
 
-QUANTIDADE: Mínimo 15 flashcards de alta qualidade.`
+QUANTIDADE: Exatamente 50 flashcards de alta qualidade, cobrindo TODO o tópico (sem lacunas).`
   }
   
   return `${unified.prompt}
@@ -1013,7 +1013,7 @@ Retorne APENAS JSON válido com esta estrutura:
   ]
 }
 
-QUANTIDADE: Mínimo 15 flashcards de alta qualidade. Priorize QUALIDADE sobre quantidade.`
+QUANTIDADE: Exatamente 50 flashcards de alta qualidade, cobrindo TODO o tópico. Prefira fato confirmado a quantidade duvidosa — mas o alvo do tópico é 50 cards corretos e alinhados à banca/cargo/edital.`
 }
 
 /**

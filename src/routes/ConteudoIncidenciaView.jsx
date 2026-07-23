@@ -147,6 +147,8 @@ const ConteudoIncidenciaView = () => {
       const courseData = courseDoc.exists() ? courseDoc.data() : {}
       const banca = courseData.banca || ''
       const cargo = courseData.cargo || courseData.competition || ''
+      const concursoName = courseData.competition || courseData.name || courseName || ''
+      const nivelCurso = courseData.nivel || courseData.nivelCurso || courseData.escolaridade || ''
 
       // Carregar edital verticalizado para contexto
       const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
@@ -176,7 +178,9 @@ const ConteudoIncidenciaView = () => {
           courseMeta: {
             banca,
             cargo,
+            concursoName,
             courseName: courseName || 'Curso Preparatório',
+            nivelCurso,
             editalText,
           },
           savePlan: {
@@ -198,7 +202,9 @@ const ConteudoIncidenciaView = () => {
             topicos: topicosStructure,
             banca,
             cargo,
+            concursoName,
             courseName: courseName || 'Curso Preparatório',
+            nivelCurso,
             editalText,
             courseId,
             generateFn: generateAiJson,

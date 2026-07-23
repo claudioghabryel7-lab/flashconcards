@@ -107,7 +107,9 @@ export async function generateIncidenciaCompleta({
   topicos = [],
   banca = '',
   cargo = '',
+  concursoName = '',
   courseName = 'Curso Preparatório',
+  nivelCurso = '',
   editalText = '',
   courseId = null,
   generateFn = generateAiJson,
@@ -127,6 +129,13 @@ export async function generateIncidenciaCompleta({
     },
     ...aiOptions,
   }
+  const examFields = {
+    banca,
+    cargo,
+    concursoName: concursoName || courseName,
+    courseName,
+    nivelCurso,
+  }
 
   // Disciplina pequena: tenta 1 chamada; se cortar, cai nos lotes
   if (lista.length > 0 && lista.length <= INCIDENCIA_TOPICS_PER_BATCH) {
@@ -135,10 +144,8 @@ export async function generateIncidenciaCompleta({
       const prompt = buildIncidenciaAutomationPrompt({
         disciplinaNome,
         topicos: lista,
-        banca,
-        cargo,
-        courseName,
         editalText,
+        ...examFields,
       })
       const parsed = await generateFn(prompt, baseOpts)
       if (isIncidenciaContentComplete(parsed, lista.length)) {
@@ -169,12 +176,10 @@ export async function generateIncidenciaCompleta({
     const prompt = buildIncidenciaBatchPrompt({
       disciplinaNome,
       topicos: batch,
-      banca,
-      cargo,
-      courseName,
       editalText,
       batchIndex: i + 1,
       batchTotal: batches.length,
+      ...examFields,
     })
 
     let parsed = await generateFn(prompt, baseOpts)
@@ -201,10 +206,8 @@ export async function generateIncidenciaCompleta({
     const resumo = await generateFn(
       buildIncidenciaResumoPrompt({
         disciplinaNome,
-        banca,
-        cargo,
-        courseName,
         analisePorTopico,
+        ...examFields,
       }),
       {
         ...baseOpts,

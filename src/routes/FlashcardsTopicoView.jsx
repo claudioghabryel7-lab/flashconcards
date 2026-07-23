@@ -51,7 +51,7 @@ const FlashcardsTopicoView = () => {
   /** Card aberto via notificação do Professor — bypass da fila SRS */
   const [focusOverrideCard, setFocusOverrideCard] = useState(null)
 
-  const MIN_TOPIC_FLASHCARDS = 20
+  const MIN_TOPIC_FLASHCARDS = 50
 
   const publishStatus = useMemo(() => {
     if (cards.length === 0) return CONTENT_STATUS.UNAVAILABLE
@@ -218,7 +218,7 @@ const FlashcardsTopicoView = () => {
 
   const handleRegenerate = async () => {
     if (!isAdmin || regenerating || generating) return
-    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados de ${MIN_TOPIC_FLASHCARDS} a 50 cards focados apenas neste tópico.`)) {
+    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados pelo menos ${MIN_TOPIC_FLASHCARDS} cards cobrindo todo o tópico, alinhados ao concurso, cargo, banca e edital.`)) {
       return
     }
 
@@ -404,7 +404,7 @@ const FlashcardsTopicoView = () => {
             {fromCache && cards.length > 0 && (
               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                 {cards.length} flashcards neste tópico
-                {cards.length < MIN_TOPIC_FLASHCARDS && isAdmin ? ' — abaixo do mínimo recomendado (20)' : ''}
+                {cards.length < MIN_TOPIC_FLASHCARDS && isAdmin ? ` — abaixo do mínimo (${MIN_TOPIC_FLASHCARDS})` : ''}
               </p>
             )}
           </div>
