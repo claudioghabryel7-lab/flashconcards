@@ -23,6 +23,8 @@ import {
   resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
 import { buildQuestaoContentId } from '../utils/contentCommentIds'
+import SmartTeacherPlayer from '../components/teacher/SmartTeacherPlayer'
+import { useSmartTeacherQuestoes } from '../hooks/useSmartTeacherQuestoes'
 
 const CHART_TYPES = [
   { id: 'pie', label: 'Pizza', icon: ChartPieIcon },
@@ -120,7 +122,29 @@ const ResolverQuestoesView = () => {
     }
   }
 
+  const teacherGoNext = useCallback(() => {
+    setCurrentIndex((i) => {
+      if (i < deckItems.length - 1) {
+        setSelectedAnswer(null)
+        setShowResult(false)
+        return i + 1
+      }
+      return i
+    })
+  }, [deckItems.length])
+
+  const teacherQuestoes = useSmartTeacherQuestoes({
+    questoes: deckItems,
+    currentIndex,
+    tipoProva: currentItem?.tipoProva || '',
+    selectedAnswer,
+    showResult,
+    onGoNext: teacherGoNext,
+    deckTitle: selectedMateria || currentItem?.materia || '',
+  })
+
   const handlePrev = () => {
+    teacherQuestoes.stop()
     if (currentIndex > 0) {
       setCurrentIndex((i) => i - 1)
       setSelectedAnswer(null)
@@ -128,7 +152,13 @@ const ResolverQuestoesView = () => {
     }
   }
 
+  const handleNextBtn = () => {
+    teacherQuestoes.stop()
+    handleNext()
+  }
+
   const handleShuffle = () => {
+    teacherQuestoes.stop()
     setDeckItems((prev) => [...prev].sort(() => Math.random() - 0.5))
     setCurrentIndex(0)
     setSelectedAnswer(null)
@@ -414,6 +444,21 @@ const ResolverQuestoesView = () => {
                   </div>
                 )}
 
+                <SmartTeacherPlayer
+                  supported={teacherQuestoes.supported}
+                  status={teacherQuestoes.status}
+                  phase={teacherQuestoes.phase}
+                  thinkRemaining={teacherQuestoes.thinkRemaining}
+                  settings={teacherQuestoes.settings}
+                  updateSettings={teacherQuestoes.updateSettings}
+                  selectedVoice={teacherQuestoes.selectedVoice}
+                  availableVoices={teacherQuestoes.availableVoices}
+                  error={teacherQuestoes.error}
+                  onPlay={teacherQuestoes.play}
+                  onPause={teacherQuestoes.pause}
+                  onStop={teacherQuestoes.stop}
+                />
+
                 <QuestaoEnunciadoCard
                   assunto={currentQuestao.assunto || currentItem.materia}
                   probabilidade={currentQuestao.probabilidade}
@@ -468,7 +513,7 @@ const ResolverQuestoesView = () => {
                       {currentIndex < deckItems.length - 1 ? (
                         <button
                           type="button"
-                          onClick={handleNext}
+                          onClick={handleNextBtn}
                           className="cp-btn-primary flex-1 justify-center"
                         >
                           Próxima →

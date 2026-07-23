@@ -38,7 +38,14 @@ async function incrementDailyProgress(userId, courseId, hours, materia) {
   const courseKey = courseId || 'alego'
   const progressRef = doc(db, 'progress', `${userId}_${courseKey}_${todayKey}`)
   const currentDoc = await getDoc(progressRef)
-  const currentHours = currentDoc.exists() ? currentDoc.data().hours || 0 : 0
+  const prev = currentDoc.exists() ? currentDoc.data() : {}
+  const currentHours = prev.hours || 0
+  const materiasSet = new Set(
+    Array.isArray(prev.materias) ? prev.materias.filter(Boolean) : []
+  )
+  if (prev.materia) materiasSet.add(prev.materia)
+  if (materia) materiasSet.add(materia)
+  const materias = [...materiasSet]
 
   await setDoc(
     progressRef,
@@ -47,7 +54,8 @@ async function incrementDailyProgress(userId, courseId, hours, materia) {
       date: todayKey,
       hours: currentHours + hours,
       courseId: courseId ?? null,
-      materia: materia || null,
+      materia: materia || prev.materia || null,
+      materias,
       lastUpdated: dayjs().format('HH:mm:ss'),
       updatedAt: serverTimestamp(),
     }),

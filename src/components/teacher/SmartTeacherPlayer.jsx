@@ -11,12 +11,18 @@ import { formatVoiceLabel, THINK_TIME_OPTIONS } from '../../services/teacherSpee
 
 const PHASE_LABELS = {
   idle: 'Pronto para ensinar',
-  intro: 'Apresentando o flashcard…',
+  intro: 'Apresentando…',
   front: 'Lendo a frente…',
   thinking: 'Tempo para pensar',
   back: 'Lendo o verso…',
   next: 'Indo ao próximo…',
   done: 'Sessão concluída',
+  enunciado: 'Lendo o enunciado…',
+  alternativas: 'Lendo as alternativas…',
+  ask: 'Aguardando sua resposta…',
+  awaiting: 'Toque na alternativa correta',
+  feedback: 'Corrigindo…',
+  explicacao: 'Lendo a explicação…',
 }
 
 /**
@@ -40,7 +46,6 @@ export default function SmartTeacherPlayer({
 }) {
   const [showConfig, setShowConfig] = useState(false)
   const isActive = status === 'playing' || status === 'thinking' || status === 'paused'
-  const maleEmpty = settings.gender === 'male' && availableVoices.length === 0
 
   if (!supported) {
     return (
@@ -146,38 +151,8 @@ export default function SmartTeacherPlayer({
       {showConfig && (
         <div className="mt-3 space-y-3 rounded-xl border border-cp-border bg-cp-bg/80 p-3">
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-cp-muted">
-              Tipo de voz
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => updateSettings({ gender: 'female', voiceURI: '' })}
-                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                  settings.gender === 'female'
-                    ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                    : 'border-cp-border text-cp-muted hover:border-indigo-400/40'
-                }`}
-              >
-                Feminina
-              </button>
-              <button
-                type="button"
-                onClick={() => updateSettings({ gender: 'male', voiceURI: '' })}
-                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                  settings.gender === 'male'
-                    ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                    : 'border-cp-border text-cp-muted hover:border-indigo-400/40'
-                }`}
-              >
-                Masculina
-              </button>
-            </div>
-          </div>
-
-          <div>
             <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-cp-muted">
-              Voz {settings.gender === 'male' ? 'masculina' : 'feminina'} instalada
+              Voz feminina instalada
             </label>
             {availableVoices.length > 0 ? (
               <select
@@ -193,13 +168,11 @@ export default function SmartTeacherPlayer({
               </select>
             ) : (
               <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
-                {maleEmpty
-                  ? 'Nenhuma voz masculina em português encontrada neste aparelho. No Windows, abra o Edge e instale “Microsoft Antonio Online (Natural)”. No iPhone: Ajustes → Acessibilidade → Conteúdo falado → Vozes.'
-                  : 'Nenhuma voz em português encontrada. Instale uma voz Natural pt-BR no sistema.'}
+                Nenhuma voz feminina em português encontrada. No Edge/Windows, instale “Microsoft Francisca Online (Natural)”.
               </p>
             )}
             <p className="mt-1.5 text-[10px] leading-relaxed text-cp-muted">
-              Evitamos vozes antigas do Assistente Google. Preferimos Natural/Neural (Edge/Windows/iOS).
+              Voz gratuita do aparelho — prioriza Natural/Neural. Não gasta API Gemini.
             </p>
           </div>
 

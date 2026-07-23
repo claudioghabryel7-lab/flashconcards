@@ -33,6 +33,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
   const [settings, setSettings] = useState(() => getTeacherSettings())
   const [error, setError] = useState(null)
   const abortRef = useRef(null)
+  const pausedRef = useRef(false)
 
   useEffect(() => {
     if (!isSupported) return undefined
@@ -41,7 +42,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
       if (!alive) return
       setVoices(list)
       const cfg = getTeacherSettings()
-      const best = pickTeacherVoice(list, cfg.gender, cfg.voiceURI)
+      const best = pickTeacherVoice(list, 'female', cfg.voiceURI)
       if (best?.voiceURI && best.voiceURI !== cfg.voiceURI) {
         setSettings(saveTeacherSettings({ voiceURI: best.voiceURI }))
       }
@@ -53,16 +54,14 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
     }
   }, [isSupported])
 
-  const selectedVoice = pickTeacherVoice(voices, settings.gender, settings.voiceURI)
-  const availableVoices = listTeacherVoices(voices, settings.gender)
+  const selectedVoice = pickTeacherVoice(voices, 'female', settings.voiceURI)
+  const availableVoices = listTeacherVoices(voices, 'female')
 
   const updateSettings = (partial) => {
-    let next = saveTeacherSettings(partial)
-    if (partial?.gender && voices.length) {
-      const best = pickTeacherVoice(voices, next.gender, next.voiceURI)
-      if (best?.voiceURI && best.voiceURI !== next.voiceURI) {
-        next = saveTeacherSettings({ voiceURI: best.voiceURI })
-      }
+    let next = saveTeacherSettings({ ...partial, gender: 'female' })
+    if (partial?.voiceURI === undefined && voices.length && !next.voiceURI) {
+      const best = pickTeacherVoice(voices, 'female', '')
+      if (best?.voiceURI) next = saveTeacherSettings({ voiceURI: best.voiceURI })
     }
     setSettings(next)
   }
@@ -84,6 +83,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
     stopReading()
     const controller = new AbortController()
     abortRef.current = controller
+    pausedRef.current = false
     setError(null)
     setIsReading(true)
     setIsPaused(false)
@@ -94,20 +94,22 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
         voiceList = await waitForVoices()
         setVoices(voiceList)
       }
-      const voice = pickTeacherVoice(voiceList, settings.gender, settings.voiceURI)
+      const voice = pickTeacherVoice(voiceList, 'female', settings.voiceURI)
       if (showIntro) {
         await speakText(buildMaterialIntro(title), {
           voice,
-          gender: settings.gender,
+          gender: 'female',
           rate: settings.speechRate,
           signal: controller.signal,
+          shouldPause: () => pausedRef.current,
         })
       }
       await speakText(clean, {
         voice,
-        gender: settings.gender,
+        gender: 'female',
         rate: settings.speechRate,
         signal: controller.signal,
+        shouldPause: () => pausedRef.current,
       })
       setIsReading(false)
       setIsPaused(false)
@@ -122,12 +124,14 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
   const pauseReading = () => {
     if (!isReading || isPaused) return
+    pausedRef.current = true
     pauseSpeech()
     setIsPaused(true)
   }
 
   const resumeReading = () => {
     if (!isReading || !isPaused) return
+    pausedRef.current = false
     resumeSpeech()
     setIsPaused(false)
   }
@@ -194,36 +198,8 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
       <div className="space-y-2">
         <div>
-          <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">Tipo de voz</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => updateSettings({ gender: 'female', voiceURI: '' })}
-              className={`rounded-lg border px-2 py-1.5 text-xs font-semibold ${
-                settings.gender === 'female'
-                  ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                  : 'border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300'
-              }`}
-            >
-              Feminina
-            </button>
-            <button
-              type="button"
-              onClick={() => updateSettings({ gender: 'male', voiceURI: '' })}
-              className={`rounded-lg border px-2 py-1.5 text-xs font-semibold ${
-                settings.gender === 'male'
-                  ? 'border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                  : 'border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300'
-              }`}
-            >
-              Masculina
-            </button>
-          </div>
-        </div>
-
-        <div>
           <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
-            Voz instalada
+            Voz feminina instalada
           </label>
           {availableVoices.length > 0 ? (
             <select
@@ -239,8 +215,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
             </select>
           ) : (
             <p className="text-[11px] text-amber-700 dark:text-amber-300">
-              Nenhuma voz {settings.gender === 'male' ? 'masculina' : 'feminina'} pt-BR encontrada.
-              No Edge/Windows, instale vozes Natural (ex.: Antonio / Francisca).
+              Nenhuma voz feminina pt-BR encontrada. No Edge, instale Francisca Online (Natural).
             </p>
           )}
         </div>

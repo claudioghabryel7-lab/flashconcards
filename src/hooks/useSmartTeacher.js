@@ -80,8 +80,8 @@ export function useSmartTeacher({
     }
   }, [])
 
-  const selectedVoice = pickTeacherVoice(voices, settings.gender, settings.voiceURI)
-  const availableVoices = listTeacherVoices(voices, settings.gender)
+  const selectedVoice = pickTeacherVoice(voices, 'female', settings.voiceURI)
+  const availableVoices = listTeacherVoices(voices, 'female')
 
   const stopAll = useCallback(() => {
     runIdRef.current += 1
@@ -100,12 +100,13 @@ export function useSmartTeacher({
   useEffect(() => () => stopAll(), [stopAll])
 
   const updateSettings = useCallback((partial) => {
-    let next = saveTeacherSettings(partial)
-    // Ao trocar gênero, já escolhe a melhor voz masculina/feminina disponível
-    if (partial?.gender && voicesRef.current.length) {
-      const best = pickTeacherVoice(voicesRef.current, next.gender, next.voiceURI)
-      if (best?.voiceURI && best.voiceURI !== next.voiceURI) {
-        next = saveTeacherSettings({ voiceURI: best.voiceURI })
+    const next = saveTeacherSettings({ ...partial, gender: 'female' })
+    if (partial?.voiceURI === undefined && voicesRef.current.length && !next.voiceURI) {
+      const best = pickTeacherVoice(voicesRef.current, 'female', '')
+      if (best?.voiceURI) {
+        const withVoice = saveTeacherSettings({ voiceURI: best.voiceURI })
+        setSettings(withVoice)
+        return withVoice
       }
     }
     setSettings(next)
@@ -131,12 +132,13 @@ export function useSmartTeacher({
         voicesRef.current = voiceList
         setVoices(voiceList)
       }
-      const voice = pickTeacherVoice(voiceList, cfg.gender, cfg.voiceURI)
+      const voice = pickTeacherVoice(voiceList, 'female', cfg.voiceURI)
       await speakText(clean, {
         voice,
-        gender: cfg.gender,
+        gender: 'female',
         rate: cfg.speechRate,
         signal,
+        shouldPause: () => pausedRef.current,
       })
       await waitIfPaused(signal)
     },
@@ -258,7 +260,7 @@ export function useSmartTeacher({
   const pause = useCallback(() => {
     if (!playingRef.current) return
     pausedRef.current = true
-    pauseSpeech()
+    pauseSpeech() // cancela utterance; speakText relê o pedaço ao continuar
     setStatus('paused')
   }, [])
 

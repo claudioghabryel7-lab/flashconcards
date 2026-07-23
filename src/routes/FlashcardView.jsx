@@ -750,7 +750,7 @@ const FlashcardView = () => {
   }
 
   // Avaliar dificuldade - Sistema Noji/Anki simplificado
-  const rateDifficulty = async (cardId, difficulty) => {
+  const rateDifficulty = async (cardId, difficulty, options = {}) => {
     if (!user || !cardId) return
 
     try {
@@ -789,8 +789,9 @@ const FlashcardView = () => {
         return nextRatings
       })
 
-      // Mantém o índice: o próximo card escorrega para a mesma posição (fácil e difícil).
-      // Antes o difícil saltava para o fim e "perdia" o card que o aluno estava estudando.
+      // Durante Modo Professor, a aula controla o avanço
+      if (options?.skipAdvance) return
+
       setCurrentIndex(nextIndexAfterRating(indexBefore, queueAfterLength))
     } catch (err) {
       console.error('Erro ao salvar revisão SRS:', err)

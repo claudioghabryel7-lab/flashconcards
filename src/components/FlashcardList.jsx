@@ -95,11 +95,15 @@ const FlashcardList = ({
   const handleRate = useCallback(
     (difficulty) => {
       if (!currentCard || !onRateDifficulty) return
-      teacherStop()
-      onRateDifficulty(currentCard.id, difficulty)
-      setFlipped(false)
+      const teacherDriving =
+        teacherStatus === 'playing' || teacherStatus === 'thinking' || teacherStatus === 'paused'
+      // Durante a aula: salva Difícil/Fácil sem parar a leitura nem avançar o índice
+      onRateDifficulty(currentCard.id, difficulty, { skipAdvance: teacherDriving })
+      if (!teacherDriving) {
+        setFlipped(false)
+      }
     },
-    [currentCard, onRateDifficulty, teacherStop]
+    [currentCard, onRateDifficulty, teacherStatus]
   )
 
   useEffect(() => {

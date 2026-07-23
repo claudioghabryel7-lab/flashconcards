@@ -211,12 +211,32 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
                   {day.format('D')}
                 </div>
                 
-                {/* Matéria estudada - mostrar abaixo do número (apenas em telas maiores) */}
-                {done && (isInRange || isToday) && bySubject[day.format('YYYY-MM-DD')]?.materia && (
-                  <div className="hidden sm:block absolute top-4 sm:top-5 left-1 right-1 text-[6px] sm:text-[7px] md:text-[8px] text-white/90 font-medium truncate leading-tight px-0.5 bg-black/20 rounded" title={bySubject[day.format('YYYY-MM-DD')].materia}>
-                    {bySubject[day.format('YYYY-MM-DD')].materia.length > 8 ? bySubject[day.format('YYYY-MM-DD')].materia.substring(0, 8) + '...' : bySubject[day.format('YYYY-MM-DD')].materia}
-                  </div>
-                )}
+                {/* Matérias estudadas — mostra X, Y… (não só a última) */}
+                {done && (isInRange || isToday) && (() => {
+                  const dayKey = day.format('YYYY-MM-DD')
+                  const dayInfo = bySubject[dayKey]
+                  const labels = Array.isArray(dayInfo?.materias) && dayInfo.materias.length
+                    ? dayInfo.materias
+                    : dayInfo?.materia
+                      ? [dayInfo.materia]
+                      : []
+                  if (!labels.length) return null
+                  const title = labels.join(', ')
+                  const short =
+                    labels.length === 1
+                      ? labels[0].length > 10
+                        ? `${labels[0].substring(0, 10)}…`
+                        : labels[0]
+                      : `${labels[0].substring(0, 6)}… +${labels.length - 1}`
+                  return (
+                    <div
+                      className="absolute left-1 right-1 top-4 hidden truncate rounded bg-black/20 px-0.5 text-[6px] font-medium leading-tight text-white/90 sm:top-5 sm:block sm:text-[7px] md:text-[8px]"
+                      title={title}
+                    >
+                      {short}
+                    </div>
+                  )
+                })()}
                 
                 {/* Checkmark quando estudou */}
                 {showCheck && (

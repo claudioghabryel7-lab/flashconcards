@@ -1,5 +1,5 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
@@ -27,6 +27,8 @@ import ContentPublishButton from '../components/ContentPublishButton'
 import ProfessorFlagNoteBanner, {
   scrollToFocusedContent,
 } from '../components/content/ProfessorFlagNoteBanner'
+import SmartTeacherPlayer from '../components/teacher/SmartTeacherPlayer'
+import { useSmartTeacherQuestoes } from '../hooks/useSmartTeacherQuestoes'
 import {
   findQuestaoIndexInList,
   parseNivelFromContentId,
@@ -778,6 +780,41 @@ REGRAS:
     }
   }
 
+  const teacherGoNext = useCallback(() => {
+    setCurrentQuestionIndex((i) => {
+      const len = questoesParaExibir.length
+      if (i < len - 1) {
+        setSelectedAnswer(null)
+        setShowResult(false)
+        return i + 1
+      }
+      // última questão — desempenho no próximo tick
+      setTimeout(() => {
+        try {
+          calcularDesempenho()
+        } catch {
+          /* ignore */
+        }
+      }, 0)
+      return i
+    })
+  }, [questoesParaExibir.length])
+
+  const teacherQuestoes = useSmartTeacherQuestoes({
+    questoes: questoesParaExibir,
+    currentIndex: currentQuestionIndex,
+    tipoProva,
+    selectedAnswer,
+    showResult,
+    onGoNext: teacherGoNext,
+    deckTitle: effectiveTopicNome || resolvedTopicKey || '',
+  })
+
+  const handleNextQuestionBtn = () => {
+    teacherQuestoes.stop()
+    handleNextQuestion()
+  }
+
   const calcularDesempenho = async () => {
     const totalQuestoes = answers.length
     const acertos = answers.filter(a => a.isCorrect).length
@@ -1058,6 +1095,7 @@ REGRAS:
 
   const handleSkipQuestion = () => {
     if (!canPractice || showResult) return
+    teacherQuestoes.stop()
     setSelectedAnswer(null)
     setShowResult(true)
   }
@@ -1314,6 +1352,22 @@ REGRAS:
 
                         return (
                         <div className="space-y-5">
+                          {!modoAdminNavegacao && (
+                            <SmartTeacherPlayer
+                              supported={teacherQuestoes.supported}
+                              status={teacherQuestoes.status}
+                              phase={teacherQuestoes.phase}
+                              thinkRemaining={teacherQuestoes.thinkRemaining}
+                              settings={teacherQuestoes.settings}
+                              updateSettings={teacherQuestoes.updateSettings}
+                              selectedVoice={teacherQuestoes.selectedVoice}
+                              availableVoices={teacherQuestoes.availableVoices}
+                              error={teacherQuestoes.error}
+                              onPlay={teacherQuestoes.play}
+                              onPause={teacherQuestoes.pause}
+                              onStop={teacherQuestoes.stop}
+                            />
+                          )}
                           <QuestaoEnunciadoCard
                             assunto={questaoAtual.assunto}
                             probabilidade={questaoAtual.probabilidade}
@@ -1404,7 +1458,7 @@ REGRAS:
                                       ← Anterior
                                     </button>
                                   )}
-                                  <button type="button" onClick={handleNextQuestion} className="cp-btn-primary flex-1 justify-center">
+                                  <button type="button" onClick={handleNextQuestionBtn} className="cp-btn-primary flex-1 justify-center">
                                     {currentQuestionIndex < questoesParaExibir.length - 1 ? 'Próxima →' : 'Ver resultado'}
                                   </button>
                                 </div>

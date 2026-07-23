@@ -68,7 +68,7 @@ function loadRawSettings() {
     const parsed = JSON.parse(raw)
     return {
       ...DEFAULT_TEACHER_SETTINGS,
-      gender: parsed.gender === 'male' ? 'male' : 'female',
+      gender: 'female',
       voiceURI: typeof parsed.voiceURI === 'string' ? parsed.voiceURI : '',
       thinkSeconds: Number(parsed.thinkSeconds) || 15,
       speechRate: Number(parsed.speechRate) > 0 ? Number(parsed.speechRate) : 0.95,
@@ -85,9 +85,8 @@ export function getTeacherSettings() {
 
 export function saveTeacherSettings(partial) {
   const current = loadRawSettings()
-  const next = { ...current, ...partial }
-  if (partial?.gender && partial.gender !== current.gender && partial.voiceURI === undefined) {
-    // troca de gênero → limpa URI para escolher a melhor do novo gênero
+  const next = { ...current, ...partial, gender: 'female' }
+  if (partial?.voiceURI === undefined && partial?.gender) {
     next.voiceURI = ''
   }
   if (typeof window !== 'undefined') {
@@ -404,6 +403,7 @@ export async function runThinkCountdown(seconds, { signal, onTick, shouldPause }
 
 /**
  * Lê texto com Web Speech gratuito (voz moderna do aparelho).
+ * Pause robusto: cancela o pedaço atual, espera o unpause e relê o pedaço.
  */
 export function speakText(text, options = {}) {
   const {
@@ -413,6 +413,7 @@ export function speakText(text, options = {}) {
     pitch,
     volume = 1,
     signal,
+    shouldPause,
   } = options
 
   if (!isSpeechSupported()) {
@@ -426,52 +427,63 @@ export function speakText(text, options = {}) {
   const resolvedPitch =
     typeof pitch === 'number' ? pitch : gender === 'female' ? 1.04 : 0.9
 
+  const waitWhilePaused = async () => {
+    while (typeof shouldPause === 'function' && shouldPause()) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      await delay(120, signal)
+    }
+  }
+
+  const speakChunkOnce = (chunk) =>
+    new Promise((chunkResolve, chunkReject) => {
+      const utterance = new SpeechSynthesisUtterance(chunk)
+      utterance.lang = voice?.lang || 'pt-BR'
+      if (voice) utterance.voice = voice
+      utterance.rate = rate
+      utterance.pitch = resolvedPitch
+      utterance.volume = volume
+
+      utterance.onend = () => chunkResolve('end')
+      utterance.onerror = (event) => {
+        if (event?.error === 'interrupted' || event?.error === 'canceled') {
+          chunkResolve('canceled')
+          return
+        }
+        chunkReject(new Error(event?.error || 'Erro na síntese de voz'))
+      }
+
+      synth.speak(utterance)
+    })
+
   return (async () => {
-    let aborted = false
-    const onAbort = () => {
-      aborted = true
+    if (synth.paused) {
       try {
-        synth.cancel()
+        synth.resume()
       } catch {
         /* ignore */
       }
     }
-    signal?.addEventListener('abort', onAbort, { once: true })
 
-    try {
-      if (synth.paused) synth.resume()
+    for (let i = 0; i < chunks.length; i += 1) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      await waitWhilePaused()
 
-      for (let i = 0; i < chunks.length; i += 1) {
-        if (aborted || signal?.aborted) {
-          throw new DOMException('Aborted', 'AbortError')
+      let finished = false
+      while (!finished) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+        await waitWhilePaused()
+        const result = await speakChunkOnce(chunks[i])
+        if (result === 'canceled') {
+          // Pausou no meio — espera continuar e relê o mesmo pedaço
+          await waitWhilePaused()
+          continue
         }
-
-        await new Promise((chunkResolve, chunkReject) => {
-          const utterance = new SpeechSynthesisUtterance(chunks[i])
-          utterance.lang = voice?.lang || 'pt-BR'
-          if (voice) utterance.voice = voice
-          utterance.rate = rate
-          utterance.pitch = resolvedPitch
-          utterance.volume = volume
-
-          utterance.onend = () => chunkResolve()
-          utterance.onerror = (event) => {
-            if (event?.error === 'interrupted' || event?.error === 'canceled') {
-              chunkReject(new DOMException('Aborted', 'AbortError'))
-              return
-            }
-            chunkReject(new Error(event?.error || 'Erro na síntese de voz'))
-          }
-
-          synth.speak(utterance)
-        })
-
-        if (i < chunks.length - 1) {
-          await delay(260, signal)
-        }
+        finished = true
       }
-    } finally {
-      signal?.removeEventListener('abort', onAbort)
+
+      if (i < chunks.length - 1) {
+        await delay(260, signal)
+      }
     }
   })()
 }
@@ -485,13 +497,9 @@ export function cancelSpeech() {
   }
 }
 
+/** Pause: cancela utterance atual (Chrome resume é instável). O loop relê o pedaço. */
 export function pauseSpeech() {
-  if (!isSpeechSupported()) return
-  try {
-    window.speechSynthesis.pause()
-  } catch {
-    /* ignore */
-  }
+  cancelSpeech()
 }
 
 export function resumeSpeech() {

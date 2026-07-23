@@ -166,7 +166,7 @@ const FlashcardsTopicoView = () => {
   const shareIndex = studyCards.length > 0 ? currentIndex : cards.indexOf(shareCard)
 
   const handleRate = useCallback(
-    async (cardId, difficulty) => {
+    async (cardId, difficulty, options = {}) => {
       if (!user) return
       try {
         const indexBefore = currentIndex
@@ -184,7 +184,9 @@ const FlashcardsTopicoView = () => {
           }
         }
 
-        // Fácil: some da fila; difícil: vai para o fim. Em ambos, índice estável (próximo escorrega).
+        // Durante Modo Professor, não avança o índice — a aula controla o próximo card
+        if (options?.skipAdvance) return
+
         const remaining = dueQueue.filter((c) => c.id !== cardId).length
         const queueAfterLength = difficulty === 'hard' ? remaining + 1 : remaining
         setCurrentIndex(nextIndexAfterRating(indexBefore, queueAfterLength))

@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { ClockIcon, ArrowPathIcon, ChartPieIcon } from '@heroicons/react/24/outline'
+import { ClockIcon, ChartPieIcon } from '@heroicons/react/24/outline'
 import dayjs from 'dayjs'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../firebase/config'
-
-const COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
-  '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
-]
+import { assignSubjectTopicColors } from '../utils/progressChartColors'
 
 function getStartDate(filter) {
-  const now = new Date()
   switch (filter) {
     case 'day':
       return dayjs().startOf('day').toDate()
@@ -94,23 +89,33 @@ const StudyTimeChart = ({ userId, courseId = null }) => {
         return mins > 0 && row.materia?.trim()
       })
 
-      const materiaData = {}
+      const bucket = {}
       let total = 0
 
       rows.forEach((row) => {
         const materia = row.materia.trim()
+        const assunto = String(row.assunto || '').trim()
+        const key = assunto ? `${materia}|||${assunto}` : `materia|||${materia}`
         const hours = rowMinutes(row) / 60
-        materiaData[materia] = (materiaData[materia] || 0) + hours
+        if (!bucket[key]) {
+          bucket[key] = { materia, assunto, hours: 0 }
+        }
+        bucket[key].hours += hours
         total += hours
       })
 
-      const chartData = Object.entries(materiaData)
-        .map(([materia, hours]) => ({
-          name: materia,
-          value: parseFloat(hours.toFixed(2)),
-          percentage: total > 0 ? ((hours / total) * 100).toFixed(1) : 0,
-        }))
-        .sort((a, b) => b.value - a.value)
+      const chartData = assignSubjectTopicColors(
+        Object.values(bucket)
+          .map((item) => ({
+            name: item.assunto ? `${item.materia} · ${item.assunto}` : item.materia,
+            materia: item.materia,
+            assunto: item.assunto || '',
+            isTopic: Boolean(item.assunto),
+            value: parseFloat(item.hours.toFixed(2)),
+            percentage: total > 0 ? ((item.hours / total) * 100).toFixed(1) : 0,
+          }))
+          .sort((a, b) => b.value - a.value)
+      )
 
       setStudyData(chartData)
       setTotalHours(total)
@@ -174,9 +179,12 @@ const StudyTimeChart = ({ userId, courseId = null }) => {
             <ChartPieIcon className="h-6 w-6 text-cp-accent" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-cp-text">Tempo de Estudo por Matéria</h3>
+            <h3 className="text-lg font-bold text-cp-text">Tempo de Estudo por Matéria e Tópico</h3>
             <p className="text-sm text-cp-muted">
               {getFilterLabel()}: {formatHours(totalHours)}
+              {studyData.length > 0 && (
+                <> · {[...new Set(studyData.map((d) => d.materia).filter(Boolean))].join(', ')}</>
+              )}
             </p>
           </div>
         </div>
@@ -213,7 +221,7 @@ const StudyTimeChart = ({ userId, courseId = null }) => {
                   dataKey="value"
                 >
                   {studyData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
@@ -222,20 +230,25 @@ const StudyTimeChart = ({ userId, courseId = null }) => {
           </div>
 
           <div className="space-y-3">
-            <h4 className="mb-4 font-semibold text-cp-text">Detalhes por Matéria</h4>
-            {studyData.map((item, index) => (
+            <h4 className="mb-4 font-semibold text-cp-text">Detalhes (matéria · tópico)</h4>
+            {studyData.map((item) => (
               <div
                 key={item.name}
                 className="flex items-center justify-between rounded-lg bg-cp-surface p-3"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div
-                    className="h-4 w-4 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    className="h-4 w-4 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.color }}
                   />
-                  <span className="font-medium text-cp-text">{item.name}</span>
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium text-cp-text">{item.name}</span>
+                    {item.assunto && (
+                      <span className="block truncate text-[11px] text-cp-muted">{item.materia}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <p className="font-semibold text-cp-text">{formatHours(item.value)}</p>
                   <p className="text-sm text-cp-muted">{item.percentage}%</p>
                 </div>

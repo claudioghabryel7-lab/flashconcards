@@ -62,20 +62,21 @@ const CalendarioProgresso = () => {
       const streak = calculateCurrentStreak(dates)
       setCurrentStreak(streak)
       
-      // Agrupar por matéria (se disponível)
+      // Agrupar por data — acumula TODAS as matérias do dia (X e Y)
       const bySubject = {}
       progressData.forEach(item => {
         if (item.hours > 0) {
           const date = item.date // Já está em YYYY-MM-DD
           if (!bySubject[date]) {
-            bySubject[date] = { hours: 0, count: 0, materia: null }
+            bySubject[date] = { hours: 0, count: 0, materia: null, materias: [] }
           }
           bySubject[date].hours += item.hours
           bySubject[date].count += 1
-          // Adicionar matéria se disponível
-          if (item.materia) {
-            bySubject[date].materia = item.materia
-          }
+          const names = new Set(bySubject[date].materias || [])
+          if (Array.isArray(item.materias)) item.materias.filter(Boolean).forEach((m) => names.add(m))
+          if (item.materia) names.add(item.materia)
+          bySubject[date].materias = [...names]
+          bySubject[date].materia = bySubject[date].materias.join(', ') || item.materia || null
         }
       })
       
