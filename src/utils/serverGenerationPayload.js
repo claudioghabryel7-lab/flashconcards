@@ -70,13 +70,21 @@ export function buildQuestoesIncidenciaPayload({
   }
 }
 
-export function buildFlashcardsTopicoPayload({ courseId, flashcardMeta, status, forceRegenerate = false }) {
+export function buildFlashcardsTopicoPayload({
+  courseId,
+  flashcardMeta,
+  status,
+  forceRegenerate = false,
+  materialParsed = null,
+}) {
   return {
+    forceFresh: Boolean(forceRegenerate),
     aiOptions: buildAiOptions(courseId, { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } }),
     savePlan: {
       flashcardMeta,
       status: status || null,
       forceRegenerate: Boolean(forceRegenerate),
+      ...(materialParsed ? { materialParsed } : {}),
     },
   }
 }

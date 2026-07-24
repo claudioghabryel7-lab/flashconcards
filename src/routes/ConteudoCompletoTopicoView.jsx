@@ -1,5 +1,5 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
 import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, DocumentArrowDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
@@ -37,7 +37,7 @@ import ProfessorFlagNoteBanner from '../components/content/ProfessorFlagNoteBann
 import { buildMaterialContentId } from '../utils/contentCommentIds'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
-import { downloadMaterialPdf } from '../utils/materialPdfExport'
+import { downloadMaterialPdfFromElement } from '../utils/materialPdfExport'
 import AudioReader from '../components/AudioReader'
 import { buildMaterialSpeechScript } from '../utils/materialSpeechText'
 
@@ -200,6 +200,7 @@ const ConteudoCompletoTopicoView = () => {
   const [editDraft, setEditDraft] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const pdfCaptureRef = useRef(null)
 
   // Função para registrar matéria estudada no calendário
   const registrarMateriaEstudada = async (materia) => {
@@ -451,7 +452,11 @@ const ConteudoCompletoTopicoView = () => {
     if (!conteudo || downloadingPdf) return
     setDownloadingPdf(true)
     try {
-      await downloadMaterialPdf(conteudo)
+      const el = pdfCaptureRef.current
+      if (!el) throw new Error('Área do material não encontrada para exportar')
+      await downloadMaterialPdfFromElement(el, {
+        fileNameParts: [conteudo.materia, conteudo.titulo || resolvedTopicKey || 'topico'],
+      })
     } catch (error) {
       console.error('Erro ao gerar PDF:', error)
       alert('Erro ao gerar PDF. Tente novamente.')
@@ -911,19 +916,7 @@ REGRAS FINAIS:
           topicKey: resolvedTopicKey,
         })}
       >
-        <div className="mb-8 pb-6 border-b border-cp-border">
-          <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted mb-1">Material de apoio</p>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="cp-headline break-words text-xl sm:text-3xl">
-                {conteudo.materia || conteudo.titulo || resolvedTopicKey}
-              </h1>
-              {conteudo.subtitulo && (
-                <p className="mt-2 text-sm text-cp-muted italic">{replaceConcursoWithCourse(conteudo.subtitulo)}</p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2 items-center">
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2" data-pdf-hide>
               {(hasTopicAccess || isAdmin) && conteudo && resolvedCourseId && (
                 <ContentFeedbackActions
                   courseId={resolvedCourseId}
@@ -943,7 +936,7 @@ REGRAS FINAIS:
               <button
                 type="button"
                 onClick={handleDownloadPDF}
-                disabled={downloadingPdf || !conteudo}
+                disabled={downloadingPdf || !conteudo || editingContent}
                 className="cp-btn-ghost !text-xs disabled:opacity-50"
               >
                 <DocumentArrowDownIcon className="w-4 h-4" />
@@ -982,41 +975,29 @@ REGRAS FINAIS:
                   {generating ? 'Regenerando…' : 'Regenerar'}
                 </button>
               )}
-            </div>
-          </div>
-          {isAdmin && regenMessage && (
-            <p className="mt-3 text-xs text-cp-muted">{regenMessage}</p>
-          )}
-
-          {!editingContent && conteudo && (
-            <div className="mt-4">
-              <AudioReader
-                title={conteudo.materia || conteudo.titulo || effectiveTopicNome || 'Material de apoio'}
-                text={buildMaterialSpeechScript(conteudo, { courseName })}
-                className="w-full"
-              />
-            </div>
-          )}
         </div>
+        {isAdmin && regenMessage && (
+          <p className="mb-3 text-xs text-cp-muted" data-pdf-hide>{regenMessage}</p>
+        )}
 
-        <div className="max-w-none">
+        <div ref={pdfCaptureRef} className={`max-w-none rounded-xl bg-white p-1 text-slate-900 sm:p-2 ${editingContent ? 'hidden' : ''}`}>
+            <div className="mb-6 border-b border-slate-200 pb-4">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">Material de apoio</p>
+              <h1 className="break-words text-xl font-semibold text-slate-900 sm:text-3xl">
+                {conteudo.materia || conteudo.titulo || resolvedTopicKey}
+              </h1>
+              {conteudo.subtitulo && (
+                <p className="mt-2 text-sm italic text-slate-600">{replaceConcursoWithCourse(conteudo.subtitulo)}</p>
+              )}
+            </div>
             {courseName && (
-            <div className="mb-6 cp-card !border-cp-accent/30 p-4">
-              <p className="text-sm text-cp-text">
-                Material elaborado para <span className="text-cp-accent font-medium">{courseName}</span>.
+            <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4">
+              <p className="text-sm text-slate-800">
+                Material elaborado para <span className="font-medium text-orange-700">{courseName}</span>.
               </p>
           </div>
           )}
 
-          {editingContent && isAdmin && editDraft ? (
-            <SimpleMaterialEditor
-              draft={editDraft}
-              onChange={setEditDraft}
-              onSave={handleSaveContent}
-              onCancel={handleCancelEdit}
-              saving={savingEdit}
-            />
-          ) : (
             <>
               {/* Raio-X de Probabilidade */}
               {conteudo.raioXProbabilidade && (
@@ -1207,8 +1188,27 @@ REGRAS FINAIS:
                 </div>
               )}
             </>
-          )}
         </div>
+
+        {editingContent && isAdmin && editDraft && (
+          <SimpleMaterialEditor
+            draft={editDraft}
+            onChange={setEditDraft}
+            onSave={handleSaveContent}
+            onCancel={handleCancelEdit}
+            saving={savingEdit}
+          />
+        )}
+
+        {!editingContent && conteudo && (
+          <div className="mt-4" data-pdf-hide>
+            <AudioReader
+              title={conteudo.materia || conteudo.titulo || effectiveTopicNome || 'Material de apoio'}
+              text={buildMaterialSpeechScript(conteudo, { courseName })}
+              className="w-full"
+            />
+          </div>
+        )}
       </div>
     </div>
   )

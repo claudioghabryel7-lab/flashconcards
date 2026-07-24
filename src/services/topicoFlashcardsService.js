@@ -1,3 +1,7 @@
+/**
+ * Gera e salva flashcards — sempre com material do tópico como base.
+ * Se o material ainda não existir, gera o material primeiro (mesmo ritual do mentorado).
+ */
 import {
   collection,
   doc,
@@ -21,6 +25,7 @@ import {
   buildExamAwareFlashcardMeta,
   normalizeExamContext,
 } from '../utils/examFidelityContext'
+import { ensureMaterialForTopico } from './topicoMaterialService'
 
 function topicKeyMatches(cardKey, targetKey) {
   if (!targetKey) return false
@@ -85,7 +90,8 @@ export async function fetchFlashcardsForTopico(
 }
 
 /**
- * Gera e salva flashcards para um único tópico (≥50 cards, alinhados a banca/cargo/edital).
+ * Gera e salva flashcards para um único tópico.
+ * Ritual: material (gera se faltar) → flashcards ancorados no material.
  */
 export async function generateAndSaveFlashcardsForTopico({
   courseId,
@@ -97,6 +103,7 @@ export async function generateAndSaveFlashcardsForTopico({
   courseName,
   editalText = '',
   userId = null,
+  onProgress = async () => {},
 }) {
   const resolvedId = courseId || 'alego-default'
   const courseDoc = await getDoc(doc(db, 'courses', resolvedId))
@@ -111,6 +118,28 @@ export async function generateAndSaveFlashcardsForTopico({
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
   const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
 
+  if (!userId) {
+    throw new Error('Faça login como admin para gerar flashcards.')
+  }
+
+  await onProgress(5, 'Verificando material do tópico…')
+  const materialParsed = await ensureMaterialForTopico({
+    courseId: resolvedId,
+    disciplina,
+    topicoNome,
+    topicKey: normalizedTopicKey,
+    editalText,
+    courseName: examCtx.courseName,
+    onProgress: async (pct, msg) => {
+      // Reserva 0–40% para material; flashcards ocupam o restante no job
+      await onProgress(Math.min(40, Math.round((pct / 100) * 40)), msg)
+    },
+  })
+
+  if (!materialParsed) {
+    throw new Error('Não foi possível obter o material do tópico antes dos flashcards.')
+  }
+
   const flashcardMeta = buildExamAwareFlashcardMeta(
     {
       courseId: resolvedId,
@@ -124,11 +153,9 @@ export async function generateAndSaveFlashcardsForTopico({
     examCtx,
   )
 
-  if (!userId) {
-    throw new Error('Faça login como admin para gerar flashcards.')
-  }
-
   const initialStatus = await fetchTopicoPublishStatus(resolvedId, normalizedTopicKey)
+  await onProgress(45, 'Gerando flashcards com base no material…')
+
   const { promise } = await startBackgroundGeneration({
     userId,
     courseId: resolvedId,
@@ -140,10 +167,12 @@ export async function generateAndSaveFlashcardsForTopico({
       status: initialStatus,
       forceRegenerate: true,
       flashcardMeta,
+      materialParsed,
     }),
   })
 
   await promise
+  await onProgress(100, 'Flashcards prontos')
   return fetchFlashcardsForTopico(resolvedId, disciplina, modulo, normalizedTopicKey, {
     includeUnpublished: true,
   })

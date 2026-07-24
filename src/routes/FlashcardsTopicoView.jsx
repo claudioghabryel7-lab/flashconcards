@@ -48,6 +48,7 @@ const FlashcardsTopicoView = () => {
   const [fromCache, setFromCache] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [genStatus, setGenStatus] = useState('')
   /** Card aberto via notificação do Professor — bypass da fila SRS */
   const [focusOverrideCard, setFocusOverrideCard] = useState(null)
 
@@ -88,6 +89,7 @@ const FlashcardsTopicoView = () => {
 
         if (existing.length === 0 && isAdmin) {
           setGenerating(true)
+          setGenStatus('Verificando material do tópico…')
           const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
           const editalDoc = await getDoc(editalRef)
           let editalText = ''
@@ -110,6 +112,9 @@ const FlashcardsTopicoView = () => {
             courseName,
             editalText,
             userId: user?.uid,
+            onProgress: async (_pct, msg) => {
+              if (!cancelled && msg) setGenStatus(msg)
+            },
           })
           if (!cancelled) setFromCache(false)
         } else if (!cancelled) {
@@ -129,6 +134,7 @@ const FlashcardsTopicoView = () => {
         if (!cancelled) {
           setLoading(false)
           setGenerating(false)
+          setGenStatus('')
         }
       }
     }
@@ -218,11 +224,12 @@ const FlashcardsTopicoView = () => {
 
   const handleRegenerate = async () => {
     if (!isAdmin || regenerating || generating) return
-    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados pelo menos ${MIN_TOPIC_FLASHCARDS} cards cobrindo todo o tópico, alinhados ao concurso, cargo, banca e edital.`)) {
+    if (!window.confirm(`Regenerar flashcards deste tópico?\n\nSe o material ainda não existir, ele será gerado primeiro; depois vêm pelo menos ${MIN_TOPIC_FLASHCARDS} cards alinhados ao material, concurso, cargo, banca e edital.`)) {
       return
     }
 
     setRegenerating(true)
+    setGenStatus('Verificando material do tópico…')
     setError(null)
     try {
       const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
@@ -247,17 +254,21 @@ const FlashcardsTopicoView = () => {
         courseName,
         editalText,
         userId: user?.uid,
+        onProgress: async (_pct, msg) => {
+          if (msg) setGenStatus(msg)
+        },
       })
       setCards(generated)
       setCurrentIndex(0)
       setFromCache(false)
-      toast.success(`${generated.length} flashcards gerados para este tópico.`)
+      toast.success(`${generated.length} flashcards gerados (com base no material do tópico).`)
     } catch (err) {
       console.error(err)
       setError(err.message || 'Erro ao regenerar flashcards')
       toast.error('Erro ao regenerar flashcards')
     } finally {
       setRegenerating(false)
+      setGenStatus('')
     }
   }
 
@@ -458,7 +469,9 @@ const FlashcardsTopicoView = () => {
         <div className="cp-card flex flex-col items-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
           <p className="mt-4 text-sm font-medium text-cp-text">
-            {generating || regenerating ? 'Gerando flashcards com IA (20–50 por tópico)...' : 'Carregando...'}
+            {generating || regenerating
+              ? genStatus || 'Gerando material (se faltar) e depois flashcards…'
+              : 'Carregando...'}
           </p>
           {generating && isAdmin && (
             <p className="mt-2 text-xs text-cp-muted">Após gerar, clique em Disponibilizar para liberar aos alunos.</p>

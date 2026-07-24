@@ -380,7 +380,9 @@ async function processFlashcardsTopico(
 ) {
   const meta = serverPayload?.savePlan?.flashcardMeta || {}
   const status = serverPayload?.savePlan?.status || 'indisponivel'
-  const forceFresh = Boolean(serverPayload?.forceFresh)
+  const forceFresh = Boolean(
+    serverPayload?.forceFresh || serverPayload?.savePlan?.forceRegenerate,
+  )
   const disciplina = meta.disciplina || ''
   const topicKey = meta.topicKey || serverPayload?.savePlan?.topicKey
   const batchCount = Math.ceil(FLASHCARD_TARGET / FLASHCARD_BATCH_SIZE)
