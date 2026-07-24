@@ -156,6 +156,13 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Alunos online alimentam o Professor IA (status/atividade) sem acesso ao restante de /config
+    match /config/professorFiscalizador {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
     // Chatbot da home precisa ler avatar/textos sem login
     match /config/chatbot {
       allow read: if true;
@@ -208,13 +215,9 @@ service cloud.firestore {
         
         match /flashcards/{flashcardId} {
           allow read: if isAuthenticated();
-          allow create: if isAuthenticated() && 
-                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-          allow update: if isAuthenticated();
-          allow delete: if isAuthenticated() && 
-                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          // Professor IA / Guia Mentorado (aluno ou admin online)
+          allow create, update: if isAuthenticated();
+          allow delete: if isAdmin();
         }
       }
       
@@ -240,12 +243,18 @@ service cloud.firestore {
           isAdmin()
         );
         allow list: if isAuthenticated() && (isAdmin() || configId != 'redacao');
-        allow create, update, delete: if isAdmin();
+        // Alunos online podem gravar marcadores da automação do Guia Mentorado
+        allow create, update: if isAdmin() || (
+          isAuthenticated() && configId == 'guiaMentorado'
+        );
+        allow delete: if isAdmin();
       }
       
       match /cronograma/{monthKey} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAdmin();
+        // Automação do Guia Mentorado (aluno/admin online)
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
         
         // Subcoleção userSchedules para schedules personalizados de cada usuário
         match /userSchedules/{userId} {
@@ -259,19 +268,22 @@ service cloud.firestore {
       /** Config legado do Guia Mentorado (bot do cronograma grava aqui) */
       match /guiaMentorado/{docId} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAdmin();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
 
       /** Status diário da automação do Guia Mentorado */
       match /mentoradoAutomation/{dayKey} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAdmin();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
 
-      /** Checkpoints de geração local (admin online) */
+      /** Checkpoints de geração local (admin/aluno online) */
       match /generationCheckpoints/{docId} {
-        allow read: if isAdmin();
-        allow create, update, delete: if isAdmin();
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
       
       match /materialApoio/{docId} {
@@ -354,14 +366,14 @@ service cloud.firestore {
 
       match /topicoStatus/{docId} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAdmin();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
       
       match /questoesTopico/{docId} {
         allow get: if canGetPublishedContent();
         allow list: if canReadPublishedContent();
-        allow create: if isAdmin();
-        allow update: if isAdmin();
+        allow create, update: if isAuthenticated();
         allow delete: if isAdmin();
       }
       
@@ -375,25 +387,28 @@ service cloud.firestore {
       match /flashcards/{flashcardId} {
         allow get: if canGetPublishedContent();
         allow list: if canReadPublishedContent();
-        allow create: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        allow update: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        allow delete: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
 
       match /contentFeedback/{feedbackId} {
-        allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+        // Flags da Moderação: qualquer autenticado pode ler/atualizar (Professor IA online)
+        allow read: if isAuthenticated() && (
+          resource.data.userId == request.auth.uid ||
+          isAdmin() ||
+          resource.data.kind == 'flag'
+        );
         allow create: if isAuthenticated()
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.kind == 'flag'
           && request.resource.data.contentType is string
           && request.resource.data.contentId is string;
-        allow update, delete: if isAdmin();
+        allow update: if isAdmin() || (
+          isAuthenticated() &&
+          resource.data.kind == 'flag' &&
+          request.resource.data.kind == resource.data.kind
+        );
+        allow delete: if isAdmin();
       }
 
       match /contentComments/{commentId} {

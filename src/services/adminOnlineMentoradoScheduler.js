@@ -1,8 +1,10 @@
 /**
- * Guia Mentorado — tick local enquanto o admin está online.
+ * Guia Mentorado — tick local enquanto QUALQUER usuário autenticado está online.
  * 1) Se não há cronograma → gera determinístico (sem IA)
  * 2) Se o horário do dia já passou e ainda não rodou → gera conteúdos do dia
  * 3) Redação: a cada 7 dias, se não gerou tema → rotaciona (fallback)
+ *
+ * Alunos alimentam a automação em segundo plano (sem UI de controle).
  */
 import {
   collection,
@@ -86,10 +88,13 @@ async function loadMentoradoConfigForCronograma(courseId) {
 let busy = false
 
 /**
- * Varre cursos: cronograma faltando → gera; depois dia de hoje; depois redação 7d.
+ * Varre cursos: cronograma faltando → gera; depois dia de hoje; depois redação 7d (só admin).
+ * @param {string} userId
+ * @param {{ allowRedacaoWeekly?: boolean }} [options]
  */
-export async function tickMentoradoDailyOnline(adminUserId) {
-  if (!db || !adminUserId || busy) return { skipped: true, reason: 'busy' }
+export async function tickMentoradoDailyOnline(userId, options = {}) {
+  const allowRedacaoWeekly = options.allowRedacaoWeekly === true
+  if (!db || !userId || busy) return { skipped: true, reason: 'busy' }
   if (typeof document !== 'undefined' && document.hidden) {
     return { skipped: true, reason: 'tab_hidden' }
   }
@@ -126,7 +131,8 @@ export async function tickMentoradoDailyOnline(adminUserId) {
           continue
         }
 
-        const userId = automation.automationUserId || adminUserId
+        // Jobs ficam sob o uid de quem está online (aluno não grava na pasta de outro user)
+        const runAsUserId = userId
 
         // 1) Sem dia no cronograma → gera bot (precisa data da prova)
         const hasDay = await courseHasCronogramaDay(courseId, todayKey)
@@ -141,7 +147,7 @@ export async function tickMentoradoDailyOnline(adminUserId) {
             continue
           }
           const { jobId, promise, duplicate } = await startGuiaMentoradoCronogramaGeneration({
-            userId,
+            userId: runAsUserId,
             courseId,
             config: {
               ...config,
@@ -178,7 +184,7 @@ export async function tickMentoradoDailyOnline(adminUserId) {
 
           try {
             const { jobId, promise, topicCount, duplicate } = await startMentoradoDayContentAutomation({
-              userId,
+              userId: runAsUserId,
               courseId,
               targetDate: todayKey,
               autoPublish: true,
@@ -217,8 +223,8 @@ export async function tickMentoradoDailyOnline(adminUserId) {
       }
     }
 
-    // 3) Fallback redação a cada 7 dias (admin online) — mesmo se o dia já rodou
-    if (getActiveGenerationCount() === 0) {
+    // 3) Fallback redação a cada 7 dias — só admin (grava tema + notifica)
+    if (allowRedacaoWeekly && getActiveGenerationCount() === 0) {
       try {
         const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
         const redacaoTick = await tickProfessorRedacaoWeekly()

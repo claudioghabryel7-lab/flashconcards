@@ -1,5 +1,5 @@
 /**
- * Professor IA — tick local enquanto o admin está online em QUALQUER página.
+ * Professor IA — tick local enquanto QUALQUER usuário autenticado está online.
  * Moderação: corrige sinalizações automaticamente (não precisa abrir o painel Admin).
  * Agenda De/Até: controla sessão/UI e rotação semanal de redação.
  */
@@ -144,8 +144,14 @@ export async function forceProcessModerationNow(adminUserId) {
   }
 }
 
-export async function tickProfessorOnline(adminUserId) {
-  if (!db || !adminUserId || busy) return { skipped: true, reason: 'busy' }
+/**
+ * @param {string} userId — uid de quem está online (admin ou aluno)
+ * @param {{ allowRedacaoWeekly?: boolean }} [options]
+ *   allowRedacaoWeekly: só admin (grava tema + notifica alunos)
+ */
+export async function tickProfessorOnline(userId, options = {}) {
+  const allowRedacaoWeekly = options.allowRedacaoWeekly === true
+  if (!db || !userId || busy) return { skipped: true, reason: 'busy' }
   if (typeof document !== 'undefined' && document.hidden) {
     return { skipped: true, reason: 'tab_hidden' }
   }
@@ -164,7 +170,7 @@ export async function tickProfessorOnline(adminUserId) {
     // Catch-up de sessão (agenda) — opcional
     if (data.recurringDaily && !data.enabled && within) {
       if (!(data.lastAutoStartDate === todayKey && data.phase === 'session_expired')) {
-        await setProfessorSupervisorEnabled(adminUserId, true, {
+        await setProfessorSupervisorEnabled(userId, true, {
           startHour: data.windowStartHour ?? data.dailyStartHour,
           startMinute: data.windowStartMinute ?? data.dailyStartMinute,
           endHour: data.windowEndHour,
@@ -179,46 +185,48 @@ export async function tickProfessorOnline(adminUserId) {
       await endSessionOutsideWindow(data)
     }
 
-    // Redação semanal: sempre com admin online (fallback também no Mentorado)
-    try {
-      const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
-      const redacaoTick = await tickProfessorRedacaoWeekly()
-      if (redacaoTick?.didRotate) {
-        const first = redacaoTick.rotated?.[0]
-        await patchProfessorActivity({
-          phase: 'idle_queue',
-          lastMessage: `Tema de redação da semana publicado${
-            first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
-          } (${first?.notified || 0} aluno(s) avisados).`,
-          itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
-          currentActivity: {
-            phase: 'done_item',
-            message: 'Redação semanal — novo tema',
-            itemType: 'redacao',
-            courseId: first?.courseId || null,
-            progress: 100,
-            updatedAt: serverTimestamp(),
-          },
-        })
-        return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
+    // Redação semanal: só com admin (escreve config/redacao + notifica outros usuários)
+    if (allowRedacaoWeekly) {
+      try {
+        const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
+        const redacaoTick = await tickProfessorRedacaoWeekly()
+        if (redacaoTick?.didRotate) {
+          const first = redacaoTick.rotated?.[0]
+          await patchProfessorActivity({
+            phase: 'idle_queue',
+            lastMessage: `Tema de redação da semana publicado${
+              first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
+            } (${first?.notified || 0} aluno(s) avisados).`,
+            itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
+            currentActivity: {
+              phase: 'done_item',
+              message: 'Redação semanal — novo tema',
+              itemType: 'redacao',
+              courseId: first?.courseId || null,
+              progress: 100,
+              updatedAt: serverTimestamp(),
+            },
+          })
+          return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
+        }
+      } catch (redacaoErr) {
+        console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
       }
-    } catch (redacaoErr) {
-      console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
     }
 
-    // Moderação: SEMPRE com admin online (qualquer página), independente da agenda
+    // Moderação: SEMPRE com alguém online (qualquer página), independente da agenda
     await reclaimStaleInReviewFlags()
     const flag = await fetchNextOpenFlag()
     if (!flag) {
       await patchProfessorActivity({
         phase: 'idle_queue',
         lastMessage:
-          'Fila vazia — Moderação ok. Aguardando novas sinalizações (admin online no site).',
+          'Fila vazia — Moderação ok. Aguardando novas sinalizações (usuário online no site).',
         currentActivity: {
           phase: 'idle_queue',
           message: data.recurringDaily && !within
-            ? `Fora da janela de agenda — Moderação continua sendo corrigida com admin online.`
-            : 'Admin online — Moderação em dia.',
+            ? 'Fora da janela de agenda — Moderação continua sendo corrigida com usuário online.'
+            : 'Usuário online — Moderação em dia.',
           progress: 100,
           updatedAt: serverTimestamp(),
         },
@@ -226,7 +234,7 @@ export async function tickProfessorOnline(adminUserId) {
       return { skipped: true, reason: 'empty', checked: true }
     }
 
-    return await startFlagCorrection(adminUserId, flag, data)
+    return await startFlagCorrection(userId, flag, data)
   } finally {
     busy = false
   }
