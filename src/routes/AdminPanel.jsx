@@ -40,6 +40,7 @@ import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
 import AdminPaymentChatbotConfig from '../components/AdminPaymentChatbotConfig'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
+import AdminAiUsageCosts from '../components/admin/AdminAiUsageCosts'
 import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
@@ -6985,6 +6986,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'guia-mentorado', label: '📅 Guia Mentorado', icon: '📅' },
     { id: 'professor-fiscalizador', label: '🎓 Professor IA', icon: '🎓' },
     { id: 'generation-jobs', label: '⚡ Jobs locais', icon: '⚡' },
+    { id: 'ai-costs', label: '💰 Custos IA', icon: '💰' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
   ]
   
@@ -13399,6 +13401,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
 
             {activeTab === 'generation-jobs' && <AdminGenerationJobs />}
+
+            {activeTab === 'ai-costs' && <AdminAiUsageCosts />}
           </div>
         </div>
 

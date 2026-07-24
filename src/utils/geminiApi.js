@@ -21,6 +21,7 @@ import {
   getDefaultGeminiModels,
   VERIFY_GEMINI_MODELS,
 } from './geminiModels.js'
+import { trackGeminiUsage } from '../services/aiUsageTracker.js'
 
 const MODELS = getDefaultGeminiModels()
 const VERIFY_MODELS = VERIFY_GEMINI_MODELS
@@ -158,6 +159,18 @@ async function callGeminiViaServer(prompt, options = {}) {
   if (!response.ok) {
     throw new Error(data.error || `Erro na API Gemini (${response.status})`)
   }
+
+  const modelUsed =
+    data?.modelUsed ||
+    (Array.isArray(options.models) && options.models[0]) ||
+    GEMINI_FLASH_MODEL
+  void trackGeminiUsage({
+    response: data,
+    model: modelUsed,
+    purpose: options.purpose || 'generate',
+    courseId: options.courseId || null,
+  })
+
   return data
 }
 
@@ -292,6 +305,8 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     useFunctionCalling,
     tools,
     silent,
+    purpose: options.purpose || (silent ? 'json' : 'generate'),
+    courseId: courseId || null,
   })
 
   if (!effectiveVerify) return response
@@ -314,6 +329,8 @@ export async function callGeminiWithRetry(prompt, options = {}) {
       models: VERIFY_MODELS,
       generationConfig: VERIFY_GENERATION_CONFIG,
       useGoogleSearch: true,
+      purpose: 'verify',
+      courseId: courseId || null,
     })
     const verifyText = extractGeneratedText(verifyResponse)
     const verification = parseVerificationResult(verifyText)
@@ -346,6 +363,8 @@ async function executeGeminiRequest(prompt, options = {}) {
     useFunctionCalling = false,
     tools = [],
     silent = false,
+    purpose = 'generate',
+    courseId = null,
   } = options
 
   const finalPrompt = prompt
@@ -363,6 +382,8 @@ async function executeGeminiRequest(prompt, options = {}) {
       tools,
       models,
       silent,
+      purpose,
+      courseId,
     })
   }
 
@@ -432,6 +453,12 @@ async function executeGeminiRequest(prompt, options = {}) {
       }
 
       if (!silent) console.log(`✅ Sucesso com modelo ${model}`)
+      void trackGeminiUsage({
+        response: data,
+        model,
+        purpose,
+        courseId,
+      })
       return data
 
     } catch (error) {
@@ -451,6 +478,8 @@ async function executeGeminiRequest(prompt, options = {}) {
         tools,
         models,
         silent,
+        purpose,
+        courseId,
       })
     } catch (serverErr) {
       lastError = serverErr
@@ -513,6 +542,7 @@ export async function generateAiJson(prompt, options = {}) {
     useRAG: false,
     useGoogleSearch: true,
     verifyContent: false,
+    purpose: callOptions.purpose || 'json',
     ...callOptions,
     silent: true,
   }

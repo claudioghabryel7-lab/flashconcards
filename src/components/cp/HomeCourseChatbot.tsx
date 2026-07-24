@@ -231,6 +231,7 @@ Responda APENAS JSON válido:
         trustedGeneration: true,
         useGoogleSearch: false,
         verifyContent: false,
+        purpose: 'chatbot',
         generationConfig: { maxOutputTokens: 900, temperature: 0.35 },
       })
       let reply = String(parsed?.reply || parsed?.text || '').trim()

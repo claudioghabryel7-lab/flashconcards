@@ -117,6 +117,7 @@ export async function ensureMaterialForTopico({
     verifyContent: true,
     isLegalContent: isLegal,
     useRAG: false,
+    purpose: 'material',
     maxContinues: 4,
     courseContext,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
