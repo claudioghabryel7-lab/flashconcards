@@ -76,3 +76,73 @@ export function buildMaterialSpeechScript(conteudo = {}, { courseName = '' } = {
   }
   return script.trim()
 }
+
+/**
+ * Extrato do material gerado para ancorar flashcards (fonte da verdade do tópico).
+ * Remove ruído de leitura e limita tamanho para caber no prompt.
+ */
+export function buildFlashcardMaterialAnchor(conteudo = {}, { maxChars = 14000 } = {}) {
+  if (!conteudo || typeof conteudo !== 'object') return ''
+
+  const chunks = []
+  const title = conteudo.materia || conteudo.titulo || ''
+  if (title) chunks.push(`TÍTULO: ${stripHtml(String(title))}`)
+  if (conteudo.validacaoArtigo) {
+    chunks.push(`BASE NORMATIVA: ${stripHtml(String(conteudo.validacaoArtigo))}`)
+  }
+
+  const raio = conteudo.raioXProbabilidade
+  if (raio?.padraoBanca) {
+    chunks.push(`PADRÃO DA BANCA:\n${stripHtml(String(raio.padraoBanca))}`)
+  }
+  if (Array.isArray(raio?.topicosQuentes) && raio.topicosQuentes.length) {
+    chunks.push(
+      `ASSUNTOS QUENTES:\n${raio.topicosQuentes
+        .map((item, i) => `${i + 1}. ${stripHtml(String(item))}`)
+        .join('\n')}`,
+    )
+  }
+
+  const turbo = Array.isArray(conteudo.revisaoTurbo) ? conteudo.revisaoTurbo : []
+  if (turbo.length) {
+    const turboText = turbo
+      .map((item, i) => {
+        const t = stripHtml(String(item?.titulo || `Assunto ${i + 1}`))
+        const c = stripHtml(String(item?.conteudo || ''))
+        return `### ${t}\n${c}`
+      })
+      .join('\n\n')
+    chunks.push(`REVISÃO TURBO (núcleo factual):\n${turboText}`)
+  }
+
+  if (Array.isArray(conteudo.pegadinhas) && conteudo.pegadinhas.length) {
+    const peg = conteudo.pegadinhas
+      .map((item) => {
+        const t = stripHtml(String(item?.titulo || 'Pegadinha'))
+        const c = stripHtml(String(item?.conteudo || ''))
+        return `- ${t}: ${c}`
+      })
+      .join('\n')
+    chunks.push(`PEGADINHAS:\n${peg}`)
+  }
+
+  // Legado / fallback
+  if (!turbo.length && conteudo.content) {
+    chunks.push(`CONTEÚDO:\n${stripHtml(String(conteudo.content))}`)
+  }
+
+  let text = chunks.filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim()
+  if (!text) return ''
+  if (text.length > maxChars) {
+    text = `${text.slice(0, maxChars)}\n\n[… material truncado — use só o trecho acima como base]`
+  }
+
+  return `═══ MATERIAL DO TÓPICO (FONTE DA VERDADE — OBRIGATÓRIO) ═══
+Os flashcards DEVEM ser extraídos e alinhados a este material.
+NÃO invente fato que não esteja aqui (salvo confirmação legal inequívoca via busca).
+NÃO contradiga prazos, artigos, conceitos, exceções ou gabaritos deste material.
+
+${text}
+
+═══ FIM DO MATERIAL ═══`
+}

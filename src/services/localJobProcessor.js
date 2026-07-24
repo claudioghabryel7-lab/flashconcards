@@ -21,6 +21,7 @@ import {
   appendVisualMediaAppendix,
 } from '../utils/stemVisualContent'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
+import { buildFlashcardMaterialAnchor } from '../utils/materialSpeechText'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import {
@@ -45,6 +46,7 @@ import {
   prepareFlashcardsRun,
   prepareMaterialRun,
   prepareQuestoesRun,
+  loadMaterialDraft,
   saveMaterialCheckpoint,
   saveQuestoesCheckpoint,
   setFlashcardsStatus,
@@ -367,8 +369,8 @@ function dedupeCards(cards = []) {
 }
 
 /**
- * 30 flashcards em lotes de 10 — checkpoint após CADA lote auditado.
- * Retry retoma do próximo lote sem regastar API nos já salvos.
+ * 50 flashcards em lotes de 10 — ancorados no material + edital/banca/cargo.
+ * Checkpoint após CADA lote auditado. Retry retoma sem regastar API.
  */
 async function processFlashcardsTopico(
   courseId,
@@ -403,6 +405,12 @@ async function processFlashcardsTopico(
       )
     ).text ||
     ''
+
+  // Material já gerado = fonte factual dos cards (mentorado gera material antes; admin pode regenerar FC com material existente)
+  const materialFromPayload = serverPayload?.savePlan?.materialParsed || null
+  const materialDraft = materialFromPayload || (await loadMaterialDraft(courseId, topicKey))
+  const materialAnchor = buildFlashcardMaterialAnchor(materialDraft)
+  const hasMaterialAnchor = Boolean(materialAnchor)
 
   const prep = await prepareFlashcardsRun({
     courseId,
@@ -439,7 +447,12 @@ async function processFlashcardsTopico(
       `Retomando flashcards — lote ${startBatch}/${batchCount} (${allCards.length} já salvos, sem re-gerar)…`,
     )
   } else {
-    await updateProgress(10, 'Gerando flashcards em lotes auditados…')
+    await updateProgress(
+      10,
+      hasMaterialAnchor
+        ? 'Gerando flashcards ancorados no material do tópico…'
+        : 'Gerando flashcards (sem material salvo — usando edital/banca/cargo)…',
+    )
   }
 
   const basePrompt = await buildFlashcardPrompt(
@@ -455,7 +468,7 @@ async function processFlashcardsTopico(
     const pct = 10 + Math.round((batchNum / batchCount) * 65)
     await updateProgress(
       pct,
-      `Flashcards lote ${batchNum}/${batchCount} (${cardsInBatch} cards + dossiê factual)…`,
+      `Flashcards lote ${batchNum}/${batchCount} (${cardsInBatch} cards${hasMaterialAnchor ? ' · base: material' : ''})…`,
     )
 
     const existingFronts = allCards.map((c) => c.pergunta || c.frente).filter(Boolean)
@@ -481,10 +494,17 @@ async function processFlashcardsTopico(
     const topicoNome = meta.topicoNome || meta.topicKey || ''
     const coverageHint =
       batchNum === 1
-        ? 'Comece pelos núcleos cobráveis do tópico (conceitos-chave, artigos, prazos, competências, exceções).'
+        ? 'Comece pelos núcleos do MATERIAL (conceitos-chave, artigos, prazos, competências, exceções).'
         : batchNum === batchCount
-          ? 'Feche lacunas: exceções, pegadinhas da banca, distinções e detalhes finos ainda não cobertos.'
-          : 'Continue a cobertura sistemática do tópico — subtemas ainda não abordados nas frentes acima.'
+          ? 'Feche lacunas do MATERIAL: exceções, pegadinhas da banca, distinções e detalhes finos ainda não cobertos.'
+          : 'Continue a cobertura sistemática do MATERIAL — subtemas ainda não abordados nas frentes acima.'
+
+    const materialRule = hasMaterialAnchor
+      ? `2. FONTE DA VERDADE: o MATERIAL DO TÓPICO abaixo + CONCURSO/CARGO/BANCA/EDITAL (${examCtx.concursoName} / ${examCtx.cargo} / ${examCtx.banca}).
+   - Extraia fatos do material. NÃO contradiga o material.
+   - Se o material for omisso e a busca confirmar um fato cobrável, pode incluir.
+   - Se busca e material conflitarem em detalhe normativo, prefira o texto legal vigente confirmado; na dúvida, OMITA o card.`
+      : `2. Alinhe 100% ao CONCURSO, CARGO, BANCA e EDITAL (${examCtx.concursoName} / ${examCtx.cargo} / ${examCtx.banca}). Material do tópico ausente — seja ainda mais conservador com fatos.`
 
     const promptCore = `${buildExamFidelityBlock(examCtx)}
 ${basePrompt}
@@ -495,13 +515,15 @@ TÓPICO EXATO: ${topicoNome}
 MÓDULO: ${meta.modulo || ''}
 ${buildExamFidelityInline(examCtx)}
 
+${materialAnchor || '═══ MATERIAL DO TÓPICO: AUSENTE — baseie-se só em edital/banca/cargo + busca confirmada ═══'}
+
 TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCount} de ${FLASHCARD_TARGET} total).
-META DO TÓPICO: ${FLASHCARD_TARGET} cards que, juntos, cubram TODO o tópico do edital — sem lacunas graves.
+META DO TÓPICO: ${FLASHCARD_TARGET} cards que, juntos, cubram TODO o tópico — sem lacunas graves e SEM contradizer o material.
 ${coverageHint}
 
 REGRAS DE OURO (violação = card inválido):
 1. CADA card DEVE ser 100% sobre o TÓPICO EXATO acima — nada de assuntos vizinhos ou genéricos da disciplina.
-2. Alinhe 100% ao CONCURSO, CARGO, BANCA e EDITAL (${examCtx.concursoName} / ${examCtx.cargo} / ${examCtx.banca}).
+${materialRule}
 3. Use Google Search. Confirme leis/artigos. Fato não confirmado → omita. Dúvida factual → NÃO inclua.
 4. PROIBIDO: "O que é X?" com definição vaga; curiosidades; conteúdo óbvio; misturar outro tópico.
 5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova (estilo ${examCtx.banca}, nível ${examCtx.nivelCurso || 'do cargo'}).
@@ -530,9 +552,9 @@ Retorne APENAS JSON:
           : `${prompt}
 
 ═══ REGENERAÇÃO ${attempt}/3 ═══
-O lote anterior foi REJEITADO (vazio/genérico/curto/dúvida factual/contradição).
-Gere de novo: 100% no TÓPICO EXATO, verso técnico, confirme com Google Search.
-NÃO contradiga cards já gerados. Prefira menos cards corretos a cards duvidosos.`,
+O lote anterior foi REJEITADO (vazio/genérico/curto/dúvida factual/contradição com material ou cards).
+Gere de novo: 100% no TÓPICO EXATO, alinhado ao MATERIAL e à banca/cargo/edital.
+NÃO contradiga o material nem cards já gerados. Prefira menos cards corretos a cards duvidosos.`,
         {
           courseId,
           ...buildTrustedOptions(disciplina, {
@@ -1005,6 +1027,7 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
           status: draftStatus,
           topicKey,
           googleAiDossier,
+          materialParsed,
         },
       },
       async (p, msg) =>
