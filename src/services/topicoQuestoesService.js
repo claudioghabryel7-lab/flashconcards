@@ -121,6 +121,7 @@ FORMATO JSON (apenas JSON válido):
       trustedGeneration: true,
       useGoogleSearch: true,
       useRAG: true,
+      purpose: 'questoes',
       maxContinues: 2,
       generationConfig: { maxOutputTokens: 16000, temperature: 0.2 },
     })
