@@ -1,6 +1,6 @@
 import {
   CONTEUDO_COMPLETO_DEPTH,
-  getConteudoCompletoDepthInstructions,
+  getConteudoCompletoSkeletonInstructions,
 } from './contentDepthRules'
 import { AI_TEXT_FORMAT_RULES, AI_MATERIAL_FORMAT_RULES } from './aiTextFormatting'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
@@ -106,7 +106,7 @@ export function buildMentoradoConteudoPrompt({
     nivel: nivelCurso,
     ...rest,
   })
-  const depth = getConteudoCompletoDepthInstructions({
+  const skeleton = getConteudoCompletoSkeletonInstructions({
     banca: exam.banca,
     concursoName: exam.concursoName,
     courseName: exam.courseName,
@@ -117,9 +117,11 @@ export function buildMentoradoConteudoPrompt({
       ? `"correta": "C"`
       : `"alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
     "correta": "A"`
+  const stubWords = `${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_ESQUELETO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_ESQUELETO}`
 
   return `${buildExamFidelityBlock(exam)}
-Gere material de apoio completo (Estudar) para o tópico do edital abaixo.
+Gere o ESQUELETO do material de apoio (Estudar) para o tópico do edital abaixo.
+A profundidade da Revisão Turbo será feita numa 2ª passagem (item a item). NÃO escreva resumos longos agora.
 
 ${buildExamFidelityInline(exam)}
 DISCIPLINA: ${disciplina}
@@ -129,7 +131,7 @@ CHAVE DO TÓPICO: ${topicKey}
 EDITAL (trecho):
 ${(editalText || '').slice(0, 10000)}
 
-${depth}
+${skeleton}
 
 PRIORIDADE ABSOLUTA: conteúdo cobrado pela banca ${exam.banca} para o cargo ${exam.cargo} neste concurso (${exam.concursoName}).
 Nada genérico de outros cargos. Questões embutidas no formato ${exam.tipoProva}.
@@ -156,34 +158,33 @@ Retorne APENAS JSON válido:
     "padraoBanca": "<h4>Como a banca cobra</h4><p>detalhe da ${exam.banca} para ${exam.cargo}</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul>"
   },
   "revisaoTurbo": [
-    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Base normativa</h4><p>...</p><h4>Distinções e exceções</h4><ul><li>...</li></ul><h4>Na prática da banca</h4><p>...</p><h4>Margens de dúvida</h4><ul><li><b>Dúvida:</b> ... <b>Resposta:</b> ...</li></ul><h4>Dica de memorização</h4><p>...</p>" },
-    { "titulo": "assunto 2", "conteudo": "HTML (~340 palavras, 6 seções)" },
-    { "titulo": "assunto 3", "conteudo": "HTML (~340 palavras, 6 seções)" },
-    { "titulo": "assunto 4", "conteudo": "HTML (~340 palavras, 6 seções)" },
-    { "titulo": "assunto 5", "conteudo": "HTML (~340 palavras, 6 seções)" },
-    { "titulo": "assunto 6", "conteudo": "HTML (~340 palavras, 6 seções)" }
+    { "titulo": "assunto 1", "conteudo": "<p>Rascunho curto (${stubWords} palavras): ideia central + atenção da banca.</p>" },
+    { "titulo": "assunto 2", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 3", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 4", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 5", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 6", "conteudo": "<p>Rascunho curto…</p>" }
   ],
   "pegadinhas": [{ "titulo": "título", "conteudo": "pegadinha típica da ${exam.banca}" }],
   "questoesPreditivas": [{
     "enunciado": "texto no estilo ${exam.banca}",
     ${altBlock},
-    "gabaritoComentado": "explicação"
+    "gabaritoComentado": "explicação objetiva"
   }],
   "content": "conteúdo HTML opcional"
 }
 
 REGRAS:
-- Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens em revisaoTurbo (um por assunto quente)
+- Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens em revisaoTurbo (stubs curtos)
+- Cada stub: ${stubWords} palavras — NÃO escreva as 6 seções longas nesta fase
 - padraoBanca DETALHADO (não uma frase genérica) — explique como a ${exam.banca} cobra o tópico
-- Cada resumo com 6 seções: conceito, base normativa, distinções, prática da banca, margens de dúvida, dica
-- Cada resumo ~280–420 palavras; feche dúvidas com Dúvida→Resposta
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas no formato ${exam.tipoProva}
 - Campo "correta" obrigatório em cada questão preditiva
 - Foco 100% neste tópico + cargo ${exam.cargo} + banca ${exam.banca}
 - Sem markdown — apenas HTML (<b>, <i>, <p>, <h4>, <mark>, <ul>, <li>)
 - ${AI_MATERIAL_FORMAT_RULES}
 - ${AI_TEXT_FORMAT_RULES}
-- JSON completo e válido`
+- JSON completo e válido (priorize completar os ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} stubs)`
 }
 
 export function buildMentoradoQuestoesPrompt({

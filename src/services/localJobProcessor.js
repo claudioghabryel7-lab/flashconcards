@@ -821,7 +821,9 @@ async function processSingleMentoradoTopic({
           contentType: 'material',
           verifyContent: true,
           courseContext,
-          generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
+          // Fase 1 = esqueleto leve; profundidade vem no ensure item a item
+          generationConfig: { maxOutputTokens: 20000, temperature: 0.15 },
+          maxContinues: 2,
         }),
       },
     )
@@ -854,7 +856,7 @@ async function processSingleMentoradoTopic({
           contentType: 'material',
           verifyContent: false,
           courseContext,
-          generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
+          generationConfig: { maxOutputTokens: 14000, temperature: 0.2 },
         }),
       },
       context: {
@@ -863,7 +865,8 @@ async function processSingleMentoradoTopic({
         cargo: examCtx.cargo,
         concurso: examCtx.concursoName,
       },
-      maxRepairs: 2,
+      maxRepairs: 3,
+      onProgress: (msg) => updateProgress(pctBase + 1, `${label}: ${msg}`),
     })
 
     await saveMaterialCheckpoint({
