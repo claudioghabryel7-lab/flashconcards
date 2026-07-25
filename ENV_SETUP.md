@@ -27,7 +27,9 @@
 - `VITE_FIREBASE_APP_ID`
 
 ## Firebase Admin (servidor)
-- `FIREBASE_SERVICE_ACCOUNT_JSON`: JSON da service account (necessário para auth das rotas `/api/gemini`, `/api/groq`, `/api/google-search`)
+- Auth das rotas `/api/gemini`, `/api/groq`, `/api/google-search`: usa o ID token do usuário logado
+  - **Não exige** service account — basta `VITE_FIREBASE_API_KEY` no Vercel
+  - Opcional: `FIREBASE_SERVICE_ACCOUNT_JSON` para Admin SDK (webhook Mercado Pago / grant access)
 
 ## Como configurar
 1. Copie `.env.vercel.example` para `.env.local`
