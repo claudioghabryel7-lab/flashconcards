@@ -566,8 +566,7 @@ export function wasGeminiTruncated(response) {
 
 /** True se há pelo menos uma chave Gemini configurada no ambiente. */
 export function hasGeminiApiKeys() {
-  const keys = loadApiKeys()
-  return Array.isArray(keys) && keys.length > 0
+  return Boolean(getApiKey())
 }
 
 /**
