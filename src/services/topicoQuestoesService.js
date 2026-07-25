@@ -120,7 +120,9 @@ FORMATO JSON (apenas JSON válido):
       courseId,
       trustedGeneration: true,
       useGoogleSearch: true,
-      useRAG: true,
+      // Grounding já ativo → geminiApi ignora RAG (evita custo duplo)
+      useRAG: false,
+      thinkingLevel: 'low',
       maxContinues: 2,
       generationConfig: { maxOutputTokens: 16000, temperature: 0.2 },
     })

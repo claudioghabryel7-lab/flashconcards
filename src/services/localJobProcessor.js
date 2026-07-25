@@ -70,10 +70,12 @@ import {
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  // Automático no navegador: Gemini + Google Search + verificação pós-geração.
+  // Grounding só na geração; verificação pós não paga grounding de novo (geminiApi).
   useGoogleSearch: true,
   verifyContent: true,
   forceAudit: false,
+  // low: qualidade jurídica sem thinking medium/high (caro como output)
+  thinkingLevel: 'low',
 }
 
 /** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */

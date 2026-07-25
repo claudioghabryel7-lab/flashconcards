@@ -22,6 +22,10 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import {
+  getOrCreateGeminiContextCache,
+  generateWithCachedContext,
+} from '../utils/geminiContextCache'
 
 const MATERIAS = [
   'Português',
@@ -298,13 +302,12 @@ const FloatingAIChat = () => {
 
       console.log('🔍 Procurando modelo disponível...')
       
-      // Tentar modelos conhecidos diretamente (mais rápido) - apenas os que funcionam
+      // Chat: Flash-Lite/Flash apenas — sem Pro (thinking caro)
       const knownModels = [
+        'gemini-3.5-flash-lite',
         'gemini-3.6-flash',
         'gemini-3.5-flash',
-        'gemini-3.1-pro-preview',
         'gemini-flash-latest',
-        'gemini-pro-latest',
       ]
       const genAI = new GoogleGenerativeAI(apiKey)
       
@@ -313,7 +316,11 @@ const FloatingAIChat = () => {
           console.log(`🧪 Testando modelo: ${modelName}`)
           const model = genAI.getGenerativeModel({ model: modelName })
           await model.generateContent({
-            contents: [{ parts: [{ text: 'test' }] }],
+            contents: [{ parts: [{ text: 'ok' }] }],
+            generationConfig: {
+              maxOutputTokens: 1,
+              thinkingConfig: { thinkingLevel: 'minimal' },
+            },
           })
           console.log(`✅ Modelo encontrado: ${modelName}`)
           setAvailableModel(modelName)
@@ -652,16 +659,18 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
           // Isso garante que informações importantes (datas, requisitos) sejam incluídas
           let limitedPdfText = ''
           const totalLength = pdfText.length
-          if (totalLength <= 50000) {
-            // PDF pequeno/médio: usar tudo
+          // Cap ~18k chars: edital completo a cada mensagem estourava input tokens
+          const MAX_PDF_CHARS = 18000
+          if (totalLength <= MAX_PDF_CHARS) {
             limitedPdfText = pdfText
             console.log('✅ Usando PDF completo:', totalLength, 'caracteres')
           } else {
-            // PDF grande: início (40000) + fim (10000)
-            const inicio = pdfText.substring(0, 40000)
-            const fim = pdfText.substring(totalLength - 10000)
-            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - 50000} caracteres) ...]\n\n${fim}`
-            console.log('📄 PDF grande: usando início (40000) + fim (10000) =', inicio.length + fim.length, 'caracteres')
+            const head = 14000
+            const tail = 4000
+            const inicio = pdfText.substring(0, head)
+            const fim = pdfText.substring(totalLength - tail)
+            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - MAX_PDF_CHARS} caracteres) ...]\n\n${fim}`
+            console.log('📄 PDF grande: usando início+fim =', head + tail, 'caracteres')
           }
           
           editalContext += `📄 CONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA:\n`
@@ -686,7 +695,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
         console.warn('⚠️ Nenhum edital/PDF carregado para o chat')
       }
 
-      const mentorPrompt = `Você é o "Flash Mentor", mentor ${courseName}.
+      const systemPrefix = `Você é o "Flash Mentor", mentor ${courseName}.
 
 REGRAS DE RESPOSTA:
 - Respostas COMPLETAS e OBJETIVAS: 3-6 frases bem formadas
@@ -702,33 +711,60 @@ INSTRUÇÕES CRÍTICAS:
 2. PROCURE a informação no edital/PDF antes de dizer que não sabe
 3. Se a informação estiver no edital/PDF, você DEVE usá-la na resposta
 4. NUNCA diga "não há informação" se a informação estiver no edital/PDF
-5. Se perguntarem sobre:
-   - Datas → procure no edital/PDF
-   - Número de questões → procure no edital/PDF
-   - Tópicos de matérias → procure no edital/PDF
-   - Requisitos → procure no edital/PDF
-   - Qualquer coisa sobre o concurso → procure no edital/PDF primeiro
+5. Se perguntarem sobre datas, nº de questões, tópicos, requisitos → use o edital/PDF
 
-MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucional, Administrativo, Legislação Estadual, Realidade de Goiás, Redação.
+MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucional, Administrativo, Legislação Estadual, Realidade de Goiás, Redação.`
 
-Pergunta do aluno: ${userMessage}
+      const userTurn = `Pergunta do aluno: ${userMessage}
 
-⚠️ Lembre-se: Leia o edital/PDF acima ANTES de responder!`
+⚠️ Leia o edital/PDF do contexto ANTES de responder!`
+      const mentorPrompt = `${systemPrefix}\n\n${userTurn}`
+
+      const chatGenConfig = {
+        temperature: 0.7,
+        maxOutputTokens: 600,
+        topP: 0.9,
+        topK: 40,
+        thinkingConfig: { thinkingLevel: 'minimal' },
+      }
 
       // Tentar gerar resposta com Gemini primeiro
       let result = null
       let useGroqFallback = false
       
       try {
-        result = await model.generateContent({
-          contents: [{ parts: [{ text: mentorPrompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 800,
-            topP: 0.9,
-            topK: 40,
-          },
-        })
+        // Context Cache: não reenviar edital/PDF inteiro a cada mensagem
+        let usedCache = false
+        if (editalContext && editalContext.length >= 4000) {
+          const cacheName = await getOrCreateGeminiContextCache({
+            apiKey,
+            model: availableModel,
+            prefixText: systemPrefix,
+            ttl: '3600s',
+          })
+          if (cacheName) {
+            const cached = await generateWithCachedContext({
+              apiKey,
+              model: availableModel,
+              cachedContentName: cacheName,
+              userText: userTurn,
+              generationConfig: chatGenConfig,
+            })
+            if (cached?.candidates?.length) {
+              // SDK shape: result.response.candidates
+              result = { response: cached }
+              usedCache = true
+              console.log('✅ Resposta via Context Cache (edital não reenviado)')
+            }
+          }
+        }
+
+        if (!usedCache) {
+          result = await model.generateContent({
+            contents: [{ parts: [{ text: mentorPrompt }] }],
+            generationConfig: chatGenConfig,
+          })
+        }
       } catch (apiErr) {
         // Capturar erro de forma mais robusta
         const errorMessage = apiErr.message || String(apiErr) || ''
@@ -827,7 +863,8 @@ Pergunta do aluno: ${userMessage}
           
           if (candidate.content && candidate.content.parts) {
             text = candidate.content.parts
-              .map(part => part.text || '')
+              .filter((part) => part && typeof part.text === 'string' && !part.thought)
+              .map((part) => part.text)
               .join('')
               .trim()
           }

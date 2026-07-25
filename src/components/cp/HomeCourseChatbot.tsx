@@ -221,8 +221,11 @@ ${cfg.extraInfo || '(nenhuma)'}
 CATÁLOGO AO VIVO DO SITE (${liveCourses.length} curso(s)):
 ${liveCatalog || 'ERRO TEMPORÁRIO: catálogo vazio — peça para a pessoa abrir /cursos e diga que já já carrega.'}
 
-Histórico:
-${next.map((m) => `${m.role === 'user' ? 'Usuário' : 'Bot'}: ${m.text}`).join('\n')}
+Histórico (últimas 6 mensagens):
+${next
+  .slice(-6)
+  .map((m) => `${m.role === 'user' ? 'Usuário' : 'Bot'}: ${m.text.slice(0, 400)}`)
+  .join('\n')}
 
 Responda APENAS JSON válido:
 { "reply": "texto da resposta" }`
@@ -231,7 +234,9 @@ Responda APENAS JSON válido:
         trustedGeneration: true,
         useGoogleSearch: false,
         verifyContent: false,
-        generationConfig: { maxOutputTokens: 900, temperature: 0.35 },
+        useRAG: false,
+        thinkingLevel: 'minimal',
+        generationConfig: { maxOutputTokens: 400, temperature: 0.35 },
       })
       let reply = String(parsed?.reply || parsed?.text || '').trim()
 

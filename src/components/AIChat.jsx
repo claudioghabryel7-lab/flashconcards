@@ -195,11 +195,10 @@ const AIChat = () => {
         const models = data.models || []
         
         const preferred = [
+          'gemini-3.5-flash-lite',
           'gemini-3.6-flash',
           'gemini-3.5-flash',
-          'gemini-3.1-pro-preview',
           'gemini-flash-latest',
-          'gemini-pro-latest',
         ]
         const generateModels = models
           .filter((model) => {
@@ -228,16 +227,26 @@ const AIChat = () => {
         try {
           const model = genAI.getGenerativeModel({ model: modelName })
           await model.generateContent({
-            contents: [{ parts: [{ text: 'test' }] }],
+            contents: [{ parts: [{ text: 'ok' }] }],
+            generationConfig: {
+              maxOutputTokens: 1,
+              thinkingConfig: { thinkingLevel: 'minimal' },
+            },
           })
           setAvailableModel(modelName)
         } catch (testErr) {
           for (let i = 1; i < generateModels.length; i++) {
             try {
               const testModelName = generateModels[i].name.replace('models/', '')
+              // Pular Pro no chat (thinking caro)
+              if (/pro/i.test(testModelName)) continue
               const testModel = genAI.getGenerativeModel({ model: testModelName })
               await testModel.generateContent({
-                contents: [{ parts: [{ text: 'test' }] }],
+                contents: [{ parts: [{ text: 'ok' }] }],
+                generationConfig: {
+                  maxOutputTokens: 1,
+                  thinkingConfig: { thinkingLevel: 'minimal' },
+                },
               })
               setAvailableModel(testModelName)
               return
@@ -406,16 +415,17 @@ const AIChat = () => {
           // Isso garante que informações importantes (datas, requisitos) sejam incluídas
           let limitedPdfText = ''
           const totalLength = pdfText.length
-          if (totalLength <= 50000) {
-            // PDF pequeno/médio: usar tudo
+          const MAX_PDF_CHARS = 18000
+          if (totalLength <= MAX_PDF_CHARS) {
             limitedPdfText = pdfText
             console.log('✅ Usando PDF completo:', totalLength, 'caracteres')
           } else {
-            // PDF grande: início (40000) + fim (10000)
-            const inicio = pdfText.substring(0, 40000)
-            const fim = pdfText.substring(totalLength - 10000)
-            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - 50000} caracteres) ...]\n\n${fim}`
-            console.log('📄 PDF grande: usando início (40000) + fim (10000) =', inicio.length + fim.length, 'caracteres')
+            const head = 14000
+            const tail = 4000
+            const inicio = pdfText.substring(0, head)
+            const fim = pdfText.substring(totalLength - tail)
+            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - MAX_PDF_CHARS} caracteres) ...]\n\n${fim}`
+            console.log('📄 PDF grande: usando início+fim =', head + tail, 'caracteres')
           }
           
           editalContext += `📄 CONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA:\n`
@@ -501,8 +511,9 @@ Pergunta do aluno: ${userMessage}
             contents: [{ parts: [{ text: fullPrompt }] }],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 300, // Respostas curtas
+              maxOutputTokens: 300,
               topP: 0.9,
+              thinkingConfig: { thinkingLevel: 'minimal' },
             },
           })
           break // Sucesso

@@ -20,23 +20,41 @@ import {
   GEMINI_FLASH_MODEL,
   getDefaultGeminiModels,
   VERIFY_GEMINI_MODELS,
+  withCostSafeThinking,
 } from './geminiModels.js'
 
 const MODELS = getDefaultGeminiModels()
 const VERIFY_MODELS = VERIFY_GEMINI_MODELS
 
+/**
+ * Defaults baratos. Chamadas longas (material/questões) já passam maxOutputTokens alto.
+ * thinkingLevel minimal evita tokens de raciocínio cobrados como output no Gemini 3.x.
+ */
 const DEFAULT_GENERATION_CONFIG = {
   temperature: 0.35,
+  maxOutputTokens: 8192,
+  // thinkingConfig injetado por modelo em executeGeminiRequest (withCostSafeThinking)
+}
+
+/** Conteúdo jurídico longo: thinking low (qualidade) sem o default medium/high. */
+export const CONTENT_GENERATION_CONFIG = {
+  temperature: 0.35,
   maxOutputTokens: 32000,
+  thinkingConfig: { thinkingLevel: 'low' },
 }
 
 const VERIFY_GENERATION_CONFIG = {
   temperature: 0,
-  maxOutputTokens: 8192,
+  maxOutputTokens: 2048,
+  thinkingConfig: { thinkingLevel: 'minimal' },
 }
 
 const MAX_RETRIES = 1 // Apenas 1 tentativa para economizar quota
 const BASE_DELAY = 2000 // 2 segundos
+
+/** Cache do probe da API key — evita 1 chamada Gemini extra a cada generateContent. */
+const API_KEY_PROBE_TTL_MS = 10 * 60 * 1000
+let apiKeyProbeCache = { key: '', ok: false, checkedAt: 0 }
 
 /** Erros aceitáveis para exibir ao usuário (cota / limite gratuito). */
 export function isGeminiQuotaError(error) {
@@ -175,49 +193,55 @@ async function silentTestApiKey(apiKey) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: 'test' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
+          contents: [{ parts: [{ text: 'ok' }] }],
+          generationConfig: {
+            maxOutputTokens: 1,
+            thinkingConfig: { thinkingLevel: 'minimal' },
+          },
+        }),
       }
     )
 
-    const data = await response.json()
+    // 429/503/403/400 → indisponível; demais ok (inclui 200)
+    if (
+      response.status === 429 ||
+      response.status === 503 ||
+      response.status === 403 ||
+      response.status === 400
+    ) {
+      return false
+    }
 
-    // Se for 429 (quota), não está disponível
-    if (response.status === 429) {
-      return false
-    }
-    
-    // Se for 503 (alta demanda), não está disponível
-    if (response.status === 503) {
-      return false
-    }
-    
-    // Se for 403 (forbidden), não está disponível
-    if (response.status === 403) {
-      return false
-    }
-    
-    // Se for 400 (invalid), não está disponível
-    if (response.status === 400) {
-      return false
-    }
-    
     return response.ok
-  } catch (error) {
+  } catch {
     return false
   }
 }
 
 /**
- * Retorna a API key se estiver disponível (teste silencioso)
+ * Retorna a API key. Probe da key só a cada API_KEY_PROBE_TTL_MS
+ * (antes: 1 generateContent "test" em TODA chamada — vazamento grave).
  * @returns {Promise<string|undefined>}
  */
 async function getAvailableApiKey() {
   const apiKey = getApiKey()
   if (!apiKey) return undefined
 
+  const now = Date.now()
+  if (
+    apiKeyProbeCache.key === apiKey &&
+    now - apiKeyProbeCache.checkedAt < API_KEY_PROBE_TTL_MS
+  ) {
+    return apiKeyProbeCache.ok ? apiKey : undefined
+  }
+
   const isAvailable = await silentTestApiKey(apiKey)
+  // Falha: TTL curto (rede/503 transitório). Sucesso: TTL longo.
+  apiKeyProbeCache = {
+    key: apiKey,
+    ok: isAvailable,
+    checkedAt: isAvailable ? now : now - API_KEY_PROBE_TTL_MS + 60_000,
+  }
   return isAvailable ? apiKey : undefined
 }
 
@@ -227,14 +251,15 @@ async function getAvailableApiKey() {
  * @param {Object} options - Opções adicionais
  * @param {number} options.maxRetries - Número máximo de tentativas (padrão: 3)
  * @param {number} options.baseDelay - Delay base em ms (padrão: 2000)
- * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-3.6-flash, gemini-3.5-flash, gemini-3.1-pro-preview)
+ * @param {Array<string>} options.models - Lista de modelos (padrão: só Flash — sem Pro)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
- * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
- * @param {boolean} options.useRAG - Se deve usar RAG com Google Search API (padrão: true)
+ * @param {boolean} options.useGoogleSearch - Grounding Google Search (padrão: false — cobrado à parte)
+ * @param {boolean} options.useRAG - RAG via Custom Search (padrão: false)
  * @param {string} options.ragTopic - Tópico específico para busca RAG (opcional)
- * @param {boolean} options.isLegalContent - Se o conteúdo é jurídico (usa busca em sites oficiais)
- * @param {boolean} options.useFunctionCalling - Se deve usar Function Calling para buscar em APIs oficiais (padrão: false)
+ * @param {boolean} options.isLegalContent - Se o conteúdo é jurídico
+ * @param {boolean} options.useFunctionCalling - Function Calling (padrão: false)
  * @param {Array} options.tools - Ferramentas customizadas para Function Calling (padrão: [])
+ * @param {'minimal'|'low'|'medium'|'high'} options.thinkingLevel - Padrão: low (conteúdo); use minimal em chat
  * @returns {Promise<Object>} - Resposta da API
  */
 export async function callGeminiWithRetry(prompt, options = {}) {
@@ -243,21 +268,29 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
-    useGoogleSearch = true,
-    useRAG = options.isLegalContent !== false,
+    useGoogleSearch = false,
+    useRAG = false,
     ragTopic = null,
     isLegalContent = true,
     useFunctionCalling = false,
     tools = [],
     courseId = null,
     courseContext = null,
-    verifyContent = true,
+    verifyContent = false,
+    // low: qualidade de material/questões sem o default medium do Gemini 3.6
+    thinkingLevel = 'low',
     silent = false,
   } = options
 
   const effectiveVerify = Boolean(verifyContent)
-  const effectiveRAG = silent ? Boolean(options.useRAG) : useRAG
-  const effectiveGoogleSearch = silent ? Boolean(options.useGoogleSearch ?? useGoogleSearch) : useGoogleSearch
+  // Em silent, só ativa se o caller pediu explicitamente
+  const effectiveGoogleSearch = silent
+    ? Boolean(options.useGoogleSearch)
+    : Boolean(useGoogleSearch)
+  // Não empilhar RAG + Grounding na mesma chamada (custo duplo, contexto redundante)
+  const effectiveRAG = silent
+    ? Boolean(options.useRAG) && !effectiveGoogleSearch
+    : Boolean(useRAG) && !effectiveGoogleSearch
 
   let courseData = courseContext
   if (!courseData && courseId) {
@@ -291,6 +324,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     useGoogleSearch: effectiveGoogleSearch,
     useFunctionCalling,
     tools,
+    thinkingLevel,
     silent,
   })
 
@@ -307,13 +341,18 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     return response
   }
 
-  console.log('🔎 Verificação jurídica pós-geração (1 chamada Flash)...')
+  // Se a geração já usou Grounding, a verificação NÃO paga grounding de novo
+  const verifyWithSearch = !effectiveGoogleSearch
+  console.log(
+    `🔎 Verificação jurídica pós-geração (Flash, grounding=${verifyWithSearch})...`,
+  )
   try {
     const verifyPrompt = buildVerificationPrompt(generatedText, courseData || {})
     const verifyResponse = await executeGeminiRequest(verifyPrompt, {
       models: VERIFY_MODELS,
       generationConfig: VERIFY_GENERATION_CONFIG,
-      useGoogleSearch: true,
+      useGoogleSearch: verifyWithSearch,
+      thinkingLevel: 'minimal',
     })
     const verifyText = extractGeneratedText(verifyResponse)
     const verification = parseVerificationResult(verifyText)
@@ -342,15 +381,16 @@ async function executeGeminiRequest(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
-    useGoogleSearch = true,
+    useGoogleSearch = false,
     useFunctionCalling = false,
     tools = [],
+    thinkingLevel = 'low',
     silent = false,
   } = options
 
   const finalPrompt = prompt
 
-  // Teste silencioso para verificar se a API key está disponível
+  // Probe da key com cache (não a cada request)
   let apiKey = await getAvailableApiKey()
 
   // Sem key no cliente (comum no Next/Vercel) → proxy server-side
@@ -362,6 +402,7 @@ async function executeGeminiRequest(prompt, options = {}) {
       useFunctionCalling,
       tools,
       models,
+      thinkingLevel,
       silent,
     })
   }
@@ -384,21 +425,17 @@ async function executeGeminiRequest(prompt, options = {}) {
     if (!silent) console.log(`🔄 Tentando modelo: ${model}`)
 
     try {
+      const safeConfig = withCostSafeThinking(generationConfig, model, thinkingLevel)
       const requestBody = {
         contents: [{ parts: [{ text: finalPrompt }] }],
-        generationConfig,
+        generationConfig: safeConfig,
       }
 
-      // Adicionar Google Search Grounding se solicitado
+      // Grounding só quando explicitamente pedido (taxa extra por requisição)
       if (useGoogleSearch) {
-        requestBody.tools = [
-          {
-            googleSearch: {}
-          }
-        ]
+        requestBody.tools = [{ googleSearch: {} }]
       }
 
-      // Adicionar Function Calling se solicitado
       if (useFunctionCalling && tools.length > 0) {
         requestBody.tools = requestBody.tools || []
         requestBody.tools.push(...tools)
@@ -418,7 +455,36 @@ async function executeGeminiRequest(prompt, options = {}) {
       if (!response.ok) {
         const errorMessage = data.error?.message || 'Erro na API da IA'
 
-        // Se for erro 429/503 (quota/alta demanda) ou 404 (modelo indisponível), tentar próximo
+        // thinkingConfig inválido em algum modelo → retry sem thinkingConfig
+        if (
+          response.status === 400 &&
+          /thinking/i.test(errorMessage) &&
+          safeConfig.thinkingConfig
+        ) {
+          if (!silent) {
+            console.warn(`⚠️ ${model}: thinkingConfig rejeitado, repetindo sem ele...`)
+          }
+          const retryBody = {
+            ...requestBody,
+            generationConfig: { ...generationConfig },
+          }
+          delete retryBody.generationConfig.thinkingConfig
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(retryBody),
+            }
+          )
+          const retryData = await retryRes.json()
+          if (retryRes.ok) {
+            if (!silent) console.log(`✅ Sucesso com modelo ${model} (sem thinkingConfig)`)
+            return retryData
+          }
+        }
+
+        // 429/503/404 → próximo modelo (cascade só Flash por padrão)
         if (response.status === 429 || response.status === 503 || response.status === 404) {
           if (!silent) console.log(`⚠️ Modelo ${model} com erro (${response.status}), tentando próximo...`)
           lastError = new Error(errorMessage)
@@ -450,6 +516,7 @@ async function executeGeminiRequest(prompt, options = {}) {
         useFunctionCalling,
         tools,
         models,
+        thinkingLevel,
         silent,
       })
     } catch (serverErr) {
@@ -470,15 +537,21 @@ async function executeGeminiRequest(prompt, options = {}) {
  * @returns {string} - Texto gerado
  */
 export function extractGeneratedText(response) {
-  const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  
-  if (!generatedText || typeof generatedText !== 'string' || !generatedText.trim()) {
+  const parts = response.candidates?.[0]?.content?.parts || []
+  // Ignora parts de thought (thinking tokens) — só o texto visível conta para o app
+  const generatedText = parts
+    .filter((part) => part && typeof part.text === 'string' && !part.thought)
+    .map((part) => part.text)
+    .join('')
+    .trim()
+
+  if (!generatedText) {
     const err = new Error('A IA não retornou texto')
     err.code = 'ai_empty_response'
     throw err
   }
 
-  return generatedText.trim()
+  return generatedText
 }
 
 /** Motivo de parada do Gemini (ex.: MAX_TOKENS = texto cortado). */
@@ -511,8 +584,9 @@ export async function generateAiJson(prompt, options = {}) {
 
   const baseCallOpts = {
     useRAG: false,
-    useGoogleSearch: true,
+    useGoogleSearch: false,
     verifyContent: false,
+    thinkingLevel: 'minimal',
     ...callOptions,
     silent: true,
   }

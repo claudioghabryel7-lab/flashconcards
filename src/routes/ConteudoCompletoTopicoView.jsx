@@ -668,6 +668,7 @@ REGRAS FINAIS:
         trustedGeneration: true,
         useGoogleSearch: true,
         verifyContent: true,
+        thinkingLevel: 'low',
         maxContinues: 4,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       }

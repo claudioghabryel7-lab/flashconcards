@@ -120,7 +120,9 @@ export async function generateIncidenciaCompleta({
   const baseOpts = {
     courseId,
     useRAG: true,
+    useGoogleSearch: false,
     isLegalContent: true,
+    thinkingLevel: 'low',
     maxContinues: 5,
     generationConfig: {
       maxOutputTokens: INCIDENCIA_MAX_OUTPUT_TOKENS,
