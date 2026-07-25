@@ -24,6 +24,7 @@ import {
   collectGeminiTextParts,
   getGeminiFinishReason,
   hasUsableGeminiText,
+  isLikelyIncompleteJsonText,
   wasGeminiTruncated,
   withLiteThinkingConfig,
 } from './geminiResponseUtils.js'
@@ -32,6 +33,7 @@ export {
   collectGeminiTextParts,
   getGeminiFinishReason,
   hasUsableGeminiText,
+  isLikelyIncompleteJsonText,
   wasGeminiTruncated,
   withLiteThinkingConfig,
 } from './geminiResponseUtils.js'
@@ -546,10 +548,13 @@ export function hasGeminiApiKeys() {
 
 /**
  * Chamada silenciosa + parse JSON robusto (uso padrão em todas as gerações).
- * Se a resposta for cortada (MAX_TOKENS), continua automaticamente até completar o JSON.
+ * Continua se MAX_TOKENS OU JSON ainda aberto (Lite costuma parar com STOP pela metade).
+ * Nunca devolve JSON “parseável” mas truncado quando rejectTruncated=true.
  */
 export async function generateAiJson(prompt, options = {}) {
-  const maxContinues = options.maxContinues ?? 3
+  const contentType = String(options.contentType || options?.savePlan?.contentType || '').toLowerCase()
+  const isMaterial = contentType === 'material' || contentType === 'conteudo_completo'
+  const maxContinues = options.maxContinues ?? (isMaterial ? 8 : 5)
   const {
     maxContinues: _mc,
     rejectTruncated = true,
@@ -568,18 +573,22 @@ export async function generateAiJson(prompt, options = {}) {
   let fullText = extractGeneratedText(response)
   let continues = 0
 
-  while (wasGeminiTruncated(response) && continues < maxContinues) {
+  const needsContinue = () =>
+    wasGeminiTruncated(response) || isLikelyIncompleteJsonText(fullText)
+
+  while (needsContinue() && continues < maxContinues) {
     continues += 1
+    const why = wasGeminiTruncated(response) ? 'MAX_TOKENS' : 'JSON_INCOMPLETO'
     console.warn(
-      `⚠️ Resposta Gemini truncada (MAX_TOKENS). Continuando JSON (${continues}/${maxContinues})...`,
+      `⚠️ Resposta Gemini incompleta (${why}). Continuando JSON (${continues}/${maxContinues})...`,
     )
     const continuePrompt = `Continue EXATAMENTE de onde o JSON abaixo parou.
 Não repita o trecho já escrito.
 Não adicione markdown, comentários ou texto fora do JSON.
-Complete até fechar todas as chaves e colchetes, gerando um JSON 100% válido e completo.
+Complete até fechar TODAS as chaves e colchetes, gerando um JSON 100% válido e COMPLETO (não pela metade).
 
 JSON PARCIAL (continue a partir do final):
-${fullText.slice(-8000)}`
+${fullText.slice(-12000)}`
 
     response = await callGeminiWithRetry(continuePrompt, {
       ...baseCallOpts,
@@ -590,14 +599,15 @@ ${fullText.slice(-8000)}`
         ...(baseCallOpts.generationConfig || {}),
         maxOutputTokens:
           baseCallOpts.generationConfig?.maxOutputTokens || DEFAULT_GENERATION_CONFIG.maxOutputTokens,
-        temperature: Math.min(0.2, baseCallOpts.generationConfig?.temperature ?? 0.2),
+        temperature: Math.min(0.15, baseCallOpts.generationConfig?.temperature ?? 0.15),
       },
     })
     const chunk = extractGeneratedText(response)
     fullText = mergeJsonContinuation(fullText, chunk)
   }
 
-  const stillTruncated = wasGeminiTruncated(response)
+  const stillIncomplete =
+    wasGeminiTruncated(response) || isLikelyIncompleteJsonText(fullText)
 
   try {
     const parsed = await parseAiJsonText(fullText)
@@ -606,11 +616,20 @@ ${fullText.slice(-8000)}`
       err.code = 'ai_generation_error'
       throw err
     }
+    // Parseou mas ainda truncado → conteúdo pela metade (ex.: 3/6 resumos). Não aceitar.
+    if (stillIncomplete && rejectTruncated) {
+      const err = new Error(
+        'A geração foi cortada e o material ficou incompleto. Continuação esgotada — tente novamente.',
+      )
+      err.code = 'ai_truncated'
+      err.partial = parsed
+      throw err
+    }
     return parsed
   } catch (error) {
     if (isGeminiQuotaError(error)) throw error
-    if (error?.code === 'ai_generation_error') throw error
-    if (stillTruncated && rejectTruncated) {
+    if (error?.code === 'ai_generation_error' || error?.code === 'ai_truncated') throw error
+    if (stillIncomplete && rejectTruncated) {
       const err = new Error(
         'A geração foi cortada pelo limite de tokens e o conteúdo ficou incompleto. Tente novamente.',
       )

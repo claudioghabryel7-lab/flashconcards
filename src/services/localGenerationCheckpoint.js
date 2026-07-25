@@ -346,7 +346,8 @@ export async function loadMaterialDraft(courseId, topicKey) {
 }
 
 /**
- * Se material já existe e está completo (ou draft válido), reusa sem API.
+ * Se material já existe e está COMPLETO (profundidade real), reusa sem API.
+ * Material "pela metade" NÃO conta como complete — força regenerar/completar.
  */
 export async function prepareMaterialRun({ courseId, topicKey, jobId, forceFresh = false }) {
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.MATERIAL)
@@ -363,20 +364,25 @@ export async function prepareMaterialRun({ courseId, topicKey, jobId, forceFresh
   }
 
   const draft = await loadMaterialDraft(courseId, topicKey)
-  const hasContent = Boolean(
-    draft &&
-      (draft.revisaoTurbo?.length ||
-        draft.content ||
-        draft.secoes?.length ||
-        draft.raioXProbabilidade ||
-        draft.titulo),
-  )
+  if (!draft) {
+    return { resume: false, alreadyComplete: false, existingDraft: null }
+  }
 
-  if (hasContent && (cp?.complete || draft.generationComplete === true || draft.status === 'disponivel')) {
+  // Validação real de profundidade (não só "tem algum campo")
+  let depthOk = false
+  try {
+    const { isMaterialContentComplete } = await import('../utils/contentDepthRules')
+    depthOk = Boolean(isMaterialContentComplete(draft)?.ok)
+  } catch {
+    const resumos = Array.isArray(draft.revisaoTurbo) ? draft.revisaoTurbo.length : 0
+    depthOk = resumos >= 6
+  }
+
+  if (depthOk && (cp?.complete || draft.generationComplete === true || draft.status === 'disponivel')) {
     return { resume: true, alreadyComplete: true, existingDraft: draft }
   }
 
-  if (hasContent) {
+  if (depthOk) {
     await upsertCheckpoint(courseId, topicKey, ASSET.MATERIAL, {
       jobId: jobId || cp?.jobId || null,
       complete: true,
@@ -385,7 +391,16 @@ export async function prepareMaterialRun({ courseId, topicKey, jobId, forceFresh
     return { resume: true, alreadyComplete: true, existingDraft: draft }
   }
 
-  return { resume: false, alreadyComplete: false, existingDraft: null }
+  // Parcial: mantém draft para enrich, mas NÃO pula a API
+  if (cp?.complete) {
+    await upsertCheckpoint(courseId, topicKey, ASSET.MATERIAL, {
+      jobId: jobId || cp?.jobId || null,
+      complete: false,
+      generationDraft: true,
+    })
+  }
+
+  return { resume: true, alreadyComplete: false, existingDraft: draft }
 }
 
 export async function saveMaterialCheckpoint({

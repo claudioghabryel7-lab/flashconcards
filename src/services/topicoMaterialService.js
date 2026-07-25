@@ -112,12 +112,13 @@ export async function ensureMaterialForTopico({
   await onProgress(25, 'Gerando material de apoio do tópico…')
   let parsed = await generateAiJson(prompt, {
     courseId: resolvedId,
+    contentType: 'material',
     trustedGeneration: true,
     useGoogleSearch: true,
     verifyContent: true,
     isLegalContent: isLegal,
     useRAG: false,
-    maxContinues: 4,
+    maxContinues: 8,
     courseContext,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
   })

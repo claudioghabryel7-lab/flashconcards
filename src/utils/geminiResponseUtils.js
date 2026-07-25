@@ -13,6 +13,55 @@ export function wasGeminiTruncated(response) {
 }
 
 /**
+ * Detecta JSON cortado no meio (chaves/colchetes abertos) — comum no Lite
+ * quando finishReason=STOP mas o conteúdo ficou pela metade.
+ */
+export function isLikelyIncompleteJsonText(text = '') {
+  const cleaned = String(text || '')
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .trim()
+  if (!cleaned) return true
+
+  let depth = 0
+  let inString = false
+  let escape = false
+  let started = false
+
+  for (let i = 0; i < cleaned.length; i += 1) {
+    const ch = cleaned[i]
+    if (inString) {
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (ch === '\\') {
+        escape = true
+        continue
+      }
+      if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+    if (ch === '{' || ch === '[') {
+      depth += 1
+      started = true
+      continue
+    }
+    if (ch === '}' || ch === ']') {
+      depth -= 1
+    }
+  }
+
+  if (inString) return true
+  if (!started) return true
+  return depth !== 0
+}
+
+/**
  * Junta partes de texto úteis (ignora thought/reasoning do Flash-Lite).
  */
 export function collectGeminiTextParts(response, { includeThoughts = false } = {}) {

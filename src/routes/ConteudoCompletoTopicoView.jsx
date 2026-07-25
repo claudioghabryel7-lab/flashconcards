@@ -656,12 +656,13 @@ REGRAS FINAIS:
       setProgress((prev) => Math.min(prev + 15, 70))
       const genOpts = {
         courseId: resolvedCourseId,
+        contentType: 'material',
         isLegalContent: true,
         useRAG: false,
         trustedGeneration: true,
         useGoogleSearch: true,
         verifyContent: true,
-        maxContinues: 4,
+        maxContinues: 8,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       }
       let parsed = await generateAiJson(prompt, genOpts)

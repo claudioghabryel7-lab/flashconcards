@@ -198,14 +198,15 @@ async function processPromptSave(
   const forceFresh = Boolean(serverPayload?.forceFresh)
   const status = extra.status || 'indisponivel'
 
-  // Checkpoint: material / questões por tópico — não regenera se já existe
+  // Checkpoint: material / questões por tópico — não regenera se já está COMPLETO
+  let materialPrep = null
   if (topicKey && extra.contentType === 'material') {
-    const prep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
-    if (prep.alreadyComplete && prep.existingDraft) {
+    materialPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
+    if (materialPrep.alreadyComplete && materialPrep.existingDraft) {
       await updateProgress(90, `${label} já no checkpoint — pulando API`)
       return {
         resultRef: { collection: collectionName, docId, resumed: true },
-        parsed: prep.existingDraft,
+        parsed: materialPrep.existingDraft,
         resumed: true,
       }
     }
@@ -365,18 +366,72 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
     }
   }
 
-  const parsed = await generateAiJson(appendGoogleAiDossier(prompt, dossier?.text), {
-    courseId,
-    ...buildTrustedOptions(disciplina, {
-      isLegalContent: aiOptions.isLegalContent,
-      contentType: extra.contentType || aiOptions.contentType || '',
-      generationConfig: aiOptions.generationConfig,
-      courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
-    }),
-  })
-  await updateProgress(85, `Salvando ${label} (checkpoint)…`)
+  const contentType = extra.contentType || aiOptions.contentType || ''
+  const isMaterial = contentType === 'material'
 
-  if (topicKey && extra.contentType === 'material') {
+  await waitForJobControl(jobId)
+  let parsed
+  // Material parcial no checkpoint: completa em vez de jogar fora e recomeçar do zero
+  if (
+    isMaterial &&
+    materialPrep?.existingDraft &&
+    !materialPrep.alreadyComplete &&
+    !forceFresh
+  ) {
+    await updateProgress(35, `Retomando ${label} parcial — completando o que faltou…`)
+    parsed = materialPrep.existingDraft
+  } else {
+    parsed = await generateAiJson(appendGoogleAiDossier(prompt, dossier?.text), {
+      courseId,
+      maxContinues: isMaterial ? 8 : aiOptions.maxContinues,
+      ...buildTrustedOptions(disciplina, {
+        isLegalContent: aiOptions.isLegalContent,
+        contentType,
+        generationConfig: aiOptions.generationConfig || {
+          maxOutputTokens: 32000,
+          temperature: isMaterial ? 0.15 : 0.2,
+        },
+        courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
+      }),
+    })
+  }
+
+  // Material: nunca salvar "pela metade" — completa/aprofunda antes do checkpoint
+  if (topicKey && isMaterial) {
+    await waitForJobControl(jobId)
+    await updateProgress(55, `Aprofundando ${label} (completo, não parcial)…`)
+    const { ensureMaterialContentComplete, normalizeMaterialStructure } = await import(
+      '../utils/contentDepthRules'
+    )
+    parsed = await ensureMaterialContentComplete(parsed, {
+      generateAiJson,
+      generateOptions: {
+        courseId,
+        maxContinues: 4,
+        contentType: 'material',
+        ...buildTrustedOptions(disciplina, {
+          contentType: 'material',
+          verifyContent: false,
+          courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
+          generationConfig: {
+            maxOutputTokens: 32000,
+            temperature: 0.2,
+          },
+        }),
+      },
+      context: {
+        topico: extra.topico || topicKey,
+        banca: examCtx.banca,
+        cargo: examCtx.cargo,
+        concurso: examCtx.concursoName,
+      },
+      maxRepairs: 3,
+      enrichDepth: true,
+      deepenOneByOne: true,
+    })
+    parsed = normalizeMaterialStructure(parsed)
+
+    await updateProgress(85, `Salvando ${label} completo (checkpoint)…`)
     await saveMaterialCheckpoint({
       courseId,
       topicKey,
@@ -385,9 +440,14 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
       extra: { disciplina, topico: extra.topico, ...extra },
       status,
     })
-    return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
+    return {
+      resultRef: { collection: collectionName, docId },
+      parsed,
+      resumed: Boolean(materialPrep?.existingDraft),
+    }
   }
 
+  await updateProgress(85, `Salvando ${label} (checkpoint)…`)
   const resultRef = await saveMerge(courseId, collectionName, docId, parsed, extra)
   return { resultRef, parsed, resumed: false }
 }
@@ -888,11 +948,16 @@ async function processSingleMentoradoTopic({
   if (matPrep.alreadyComplete && matPrep.existingDraft) {
     materialParsed = matPrep.existingDraft
     await updateProgress(pctBase + 1, `${label}: material do checkpoint — sem API`)
+  } else if (matPrep.existingDraft && !forceFresh) {
+    // Parcial salvo antes — completa/aprofunda em vez de regenerar do zero
+    materialParsed = matPrep.existingDraft
+    await updateProgress(pctBase + 1, `${label}: material parcial — completando…`)
   } else if (topic.conteudoPrompt) {
     materialParsed = await generateAiJson(
       appendGoogleAiDossier(topic.conteudoPrompt, googleAiDossier),
       {
         courseId,
+        maxContinues: 8,
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
           verifyContent: true,
