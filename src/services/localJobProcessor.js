@@ -80,10 +80,10 @@ const TRUSTED_AI = {
 }
 
 /** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
-const TOPIC_AUTO_RETRIES = 3
+const TOPIC_AUTO_RETRIES = 2
 const TOPIC_RETRY_DELAY_MS = 2500
 /** Varredura final nos que falharam com erro temporário. */
-const DAY_SWEEP_RETRIES = 2
+const DAY_SWEEP_RETRIES = 1
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -166,8 +166,8 @@ function resolveLegalFlag(disciplina = '', explicit) {
 function buildTrustedOptions(disciplina = '', extra = {}) {
   const isLegal = resolveLegalFlag(disciplina, extra.isLegalContent)
   const { verifyContent: verifyOverride, ...rest } = extra
-  const defaultVerify =
-    rest.contentType === 'material' || (rest.contentType === 'flashcards' && isLegal)
+  // Só material jurídico ganha verify (1×). Flashcards: âncora no material + validate local.
+  const defaultVerify = rest.contentType === 'material' && isLegal
   return {
     ...TRUSTED_AI,
     forceAudit: false,
@@ -176,7 +176,6 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
     disciplina,
     ...rest,
     isLegalContent: isLegal,
-    // Material (e flashcards jurídicos): auditoria pós-geração. Questões: off (JSON + filtro).
     verifyContent: verifyOverride !== undefined ? verifyOverride : defaultVerify,
   }
 }
@@ -425,9 +424,9 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
         cargo: examCtx.cargo,
         concurso: examCtx.concursoName,
       },
-      maxRepairs: 3,
+      maxRepairs: 2,
       enrichDepth: true,
-      deepenOneByOne: true,
+      deepenOneByOne: false,
     })
     parsed = normalizeMaterialStructure(parsed)
 
@@ -659,13 +658,13 @@ Retorne APENAS JSON:
     const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
     let batchCards = []
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       const parsed = await generateAiJson(
         attempt === 1
           ? prompt
           : `${prompt}
 
-═══ REGENERAÇÃO ${attempt}/3 ═══
+═══ REGENERAÇÃO ${attempt}/2 ═══
 O lote anterior foi REJEITADO (vazio/genérico/curto/dúvida factual/contradição com material ou cards).
 Gere de novo: 100% no TÓPICO EXATO, alinhado ao MATERIAL e à banca/cargo/edital.
 NÃO contradiga o material nem cards já gerados. Prefira menos cards corretos a cards duvidosos.`,
@@ -673,6 +672,7 @@ NÃO contradiga o material nem cards já gerados. Prefira menos cards corretos a
           courseId,
           ...buildTrustedOptions(disciplina, {
             contentType: 'flashcards',
+            verifyContent: false,
             courseContext: toCourseAiContextShape({
               ...examCtx,
               disciplina,
@@ -699,10 +699,10 @@ NÃO contradiga o material nem cards já gerados. Prefira menos cards corretos a
         )
         break
       } catch (qualityErr) {
-        if (attempt >= 3) throw qualityErr
+        if (attempt >= 2) throw qualityErr
         await updateProgress(
           pct,
-          `Lote ${batchNum}: qualidade baixa — regenerando (tentativa ${attempt + 1}/3)…`,
+          `Lote ${batchNum}: qualidade baixa — regenerando (tentativa ${attempt + 1}/2)…`,
         )
       }
     }

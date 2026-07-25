@@ -2,9 +2,11 @@
  * Secrets apenas no servidor (Node). Nunca importar em código de client/bundle.
  * Aceita nomes novos (GEMINI_API_KEY) e legados (VITE_*) durante a migração.
  *
- * Chaves Gemini extras (rotação se uma expirar):
+ * Chaves Gemini extras (rotação só em erro de auth):
  * - GEMINI_API_KEY_2, GEMINI_API_KEY_3, …
  * - ou GEMINI_API_KEYS="key1,key2,key3"
+ *
+ * Não lista GEMINI_API_KEY + VITE_GEMINI_API_KEY juntos (evita 2× tentativas).
  */
 
 function read(key) {
@@ -26,6 +28,9 @@ function uniqueNonEmpty(values) {
 }
 
 export function getGeminiApiKeys() {
+  // Uma chave principal: GEMINI_API_KEY tem prioridade; VITE_* só se a nova não existir
+  const primary = read('GEMINI_API_KEY') || read('VITE_GEMINI_API_KEY')
+
   const fromList = String(read('GEMINI_API_KEYS') || '')
     .split(/[\n,;|]+/)
     .map((s) => s.trim())
@@ -37,12 +42,7 @@ export function getGeminiApiKeys() {
     if (v) numbered.push(v)
   }
 
-  return uniqueNonEmpty([
-    read('GEMINI_API_KEY'),
-    read('VITE_GEMINI_API_KEY'),
-    ...numbered,
-    ...fromList,
-  ])
+  return uniqueNonEmpty([primary, ...numbered, ...fromList])
 }
 
 export function getGeminiApiKey() {

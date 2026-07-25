@@ -27,6 +27,7 @@ import {
   isLikelyIncompleteJsonText,
   wasGeminiTruncated,
   withLiteThinkingConfig,
+  markThinkingConfigRejected,
 } from './geminiResponseUtils.js'
 
 export {
@@ -193,66 +194,6 @@ async function callGeminiViaServer(prompt, options = {}) {
 }
 
 /**
- * Teste silencioso de API key para verificar se está disponível
- * Usa a mesma lógica robusta de testApiKey
- * @param {string} apiKey - A API key para testar
- * @returns {Promise<boolean>} - True se a key está disponível
- */
-async function silentTestApiKey(apiKey) {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'test' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
-      }
-    )
-
-    const data = await response.json()
-
-    // Se for 429 (quota), não está disponível
-    if (response.status === 429) {
-      return false
-    }
-    
-    // Se for 503 (alta demanda), não está disponível
-    if (response.status === 503) {
-      return false
-    }
-    
-    // Se for 403 (forbidden), não está disponível
-    if (response.status === 403) {
-      return false
-    }
-    
-    // Se for 400 (invalid), não está disponível
-    if (response.status === 400) {
-      return false
-    }
-    
-    return response.ok
-  } catch (error) {
-    return false
-  }
-}
-
-/**
- * Retorna a API key se estiver disponível (teste silencioso)
- * @returns {Promise<string|undefined>}
- */
-async function getAvailableApiKey() {
-  const apiKey = getApiKey()
-  if (!apiKey) return undefined
-
-  const isAvailable = await silentTestApiKey(apiKey)
-  return isAvailable ? apiKey : undefined
-}
-
-/**
  * Faz uma chamada à API Gemini com retry automático e fallback de modelo
  * @param {string} prompt - O prompt para enviar à IA
  * @param {Object} options - Opções adicionais
@@ -282,13 +223,18 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     tools = [],
     courseId = null,
     courseContext = null,
-    verifyContent = true,
+    verifyContent = false,
     silent = false,
   } = options
 
   const effectiveVerify = Boolean(verifyContent)
   const effectiveRAG = silent ? Boolean(options.useRAG) : useRAG
-  const effectiveGoogleSearch = silent ? Boolean(options.useGoogleSearch ?? useGoogleSearch) : useGoogleSearch
+  // RAG já traz contexto de busca — não somar Google Search Grounding (2× custo).
+  const effectiveGoogleSearch = silent
+    ? Boolean(options.useGoogleSearch ?? useGoogleSearch)
+    : effectiveRAG
+      ? Boolean(options.allowGroundingWithRag)
+      : useGoogleSearch
 
   let courseData = courseContext
   if (!courseData && courseId) {
@@ -394,7 +340,7 @@ async function executeGeminiRequest(prompt, options = {}) {
     })
   }
 
-  let apiKey = await getAvailableApiKey()
+  const apiKey = getApiKey()
 
   if (!apiKey) {
     throw new Error(
@@ -409,6 +355,8 @@ async function executeGeminiRequest(prompt, options = {}) {
   }
 
   let lastError = null
+  let emptyFallbacks = 0
+  const MAX_EMPTY_MODEL_FALLBACKS = 1
 
   for (const model of models) {
     if (!silent) console.log(`🔄 Tentando modelo: ${model}`)
@@ -448,12 +396,13 @@ async function executeGeminiRequest(prompt, options = {}) {
       if (!response.ok) {
         const errorMessage = data.error?.message || 'Erro na API da IA'
 
-        // thinkingConfig inválido em algum modelo → tenta de novo sem ele
+        // thinkingConfig inválido → marca e tenta 1× sem ele (não repete nas próximas)
         if (
           response.status === 400 &&
           /thinking/i.test(errorMessage) &&
           requestBody.generationConfig?.thinkingConfig
         ) {
+          markThinkingConfigRejected(model)
           if (!silent) console.log(`⚠️ ${model}: thinkingConfig rejeitado — retry sem thinking`)
           const retryBody = {
             ...requestBody,
@@ -488,14 +437,16 @@ async function executeGeminiRequest(prompt, options = {}) {
         throw err
       }
 
-      // HTTP 200 mas sem texto (Lite esgotou em thinking / só thought) → próximo modelo
+      // HTTP 200 sem texto → no máx. 1 modelo extra (não 3×)
       if (!hasUsableGeminiText(data)) {
         const reason = getGeminiFinishReason(data) || 'EMPTY'
+        emptyFallbacks += 1
         if (!silent) {
           console.log(`⚠️ Modelo ${model} sem texto útil (finishReason=${reason}), tentando próximo…`)
         }
         lastError = new Error(`A IA não retornou texto (finishReason=${reason}).`)
         lastError.code = 'ai_empty_response'
+        if (emptyFallbacks > MAX_EMPTY_MODEL_FALLBACKS) break
         continue
       }
 

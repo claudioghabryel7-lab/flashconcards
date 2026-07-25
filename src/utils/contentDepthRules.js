@@ -482,7 +482,8 @@ export async function ensureMaterialContentComplete(
     context = {},
     maxRepairs = 2,
     enrichDepth = true,
-    deepenOneByOne = true,
+    /** @deprecated preferir lotes — 1 a 1 gasta ~6–12× API */
+    deepenOneByOne = false,
   } = {},
 ) {
   let material = normalizeMaterialStructure(parsed)
@@ -558,7 +559,8 @@ export async function ensureMaterialContentComplete(
     }
   }
 
-  // 3) Aprofundar Revisão Turbo — preferencialmente 1 a 1 (qualidade > velocidade)
+  // 3) Aprofundar Revisão Turbo em lotes (3 por chamada) — máx. 2 passes
+  // Evita 1 chamada por resumo (+ 2ª chance), que multiplicava a API ~6–12×.
   let shallow = getShallowResumos(material)
   if (deepenOneByOne && shallow.length > 0) {
     console.warn(`[material] aprofundando Revisão Turbo item a item (${shallow.length} rasos)…`)
@@ -570,21 +572,12 @@ export async function ensureMaterialContentComplete(
         continue
       }
       try {
-        let next = await deepenOneResumo(item, {
+        const next = await deepenOneResumo(item, {
           generateAiJson,
           generateOptions: { ...generateOptions, useGoogleSearch: true },
           context,
           material,
         })
-        // Segunda chance se ainda raso
-        if (!isResumoDeepEnough(next)) {
-          next = await deepenOneResumo(next, {
-            generateAiJson,
-            generateOptions,
-            context,
-            material,
-          })
-        }
         deepened.push(next)
       } catch (err) {
         console.warn(`[material] falha ao aprofundar "${item.titulo}":`, err?.message || err)
@@ -594,18 +587,23 @@ export async function ensureMaterialContentComplete(
     material = normalizeMaterialStructure({ ...material, revisaoTurbo: deepened })
     shallow = getShallowResumos(material)
   } else {
-    // Fallback: lotes de 1–2
     let enrichPasses = 0
-    while (shallow.length > 0 && enrichPasses < 4) {
+    const MAX_ENRICH_PASSES = 2
+    const BATCH_SIZE = 3
+    while (shallow.length > 0 && enrichPasses < MAX_ENRICH_PASSES) {
       enrichPasses += 1
-      const batch = shallow.slice(0, 1)
+      const batch = shallow.slice(0, BATCH_SIZE)
       console.warn(
-        `[material] enriquecendo resumo raso (passe ${enrichPasses}): ${batch.map((r) => r.titulo).join(', ')}`,
+        `[material] enriquecendo lote raso (passe ${enrichPasses}/${MAX_ENRICH_PASSES}): ${batch.map((r) => r.titulo).join(', ')}`,
       )
       try {
         const patch = await callMaterialPatch(
           generateAiJson,
-          { ...generateOptions, useGoogleSearch: true },
+          {
+            ...generateOptions,
+            useGoogleSearch: enrichPasses === 1,
+            maxContinues: 2,
+          },
           buildEnrichResumosPrompt(batch, context, material),
         )
         const expanded = extractRevisaoTurboItems(patch)

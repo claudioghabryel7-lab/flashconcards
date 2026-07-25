@@ -90,11 +90,24 @@ export function hasUsableGeminiText(response) {
   return Boolean(collectGeminiTextParts(response))
 }
 
+/** Modelos que já rejeitaram thinkingConfig — não reenviar (evita 2× por chamada). */
+const thinkingRejectedModels = new Set()
+
+export function markThinkingConfigRejected(model = '') {
+  const name = String(model || '').trim()
+  if (name) thinkingRejectedModels.add(name)
+}
+
+export function wasThinkingConfigRejected(model = '') {
+  return thinkingRejectedModels.has(String(model || '').trim())
+}
+
 /** thinkingConfig mínimo — Lite/Flash 3.x às vezes zeram o texto por thinking. */
 export function withLiteThinkingConfig(generationConfig = {}, model = '') {
   const cfg = { ...(generationConfig || {}) }
   const name = String(model || '')
   if (cfg.thinkingConfig) return cfg
+  if (wasThinkingConfigRejected(name)) return cfg
   if (name.includes('lite') || name.includes('flash')) {
     cfg.thinkingConfig = { thinkingLevel: 'minimal' }
   }

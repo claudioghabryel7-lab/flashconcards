@@ -20,10 +20,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Só chave principal; backups só se a principal estiver expirada
     let lastError = 'Falha ao listar modelos'
-    let sawKeyError = false
-
-    for (const apiKey of apiKeys) {
+    for (let i = 0; i < apiKeys.length; i += 1) {
+      const apiKey = apiKeys[i]
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
       )
@@ -32,18 +32,16 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(data)
       }
       lastError = data.error?.message || `HTTP ${response.status}`
-      if (isGeminiApiKeyError(lastError)) {
-        sawKeyError = true
+      if (isGeminiApiKeyError(lastError) && i < apiKeys.length - 1) {
         continue
       }
+      if (isGeminiApiKeyError(lastError)) {
+        return NextResponse.json(
+          { error: geminiKeyExpiredUserMessage(), code: 'gemini_api_key_expired' },
+          { status: 401 },
+        )
+      }
       return NextResponse.json({ error: lastError }, { status: response.status })
-    }
-
-    if (sawKeyError) {
-      return NextResponse.json(
-        { error: geminiKeyExpiredUserMessage(), code: 'gemini_api_key_expired' },
-        { status: 401 },
-      )
     }
     return NextResponse.json({ error: lastError }, { status: 502 })
   } catch (error) {
