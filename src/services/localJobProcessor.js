@@ -70,15 +70,17 @@ import {
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  // Automático no navegador: Gemini + Google Search + verificação pós-geração.
+  // Grounding na geração. Verify pós é ligado por buildTrustedOptions (material/flashcards jurídicos).
   useGoogleSearch: true,
-  verifyContent: true,
+  verifyContent: false, // default; material/flashcards jurídicos sobrescrevem para true
   forceAudit: false,
+  // low: qualidade jurídica sem thinking medium/high (caro como output)
+  thinkingLevel: 'low',
 }
 
-/** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
+/** Tentativas automáticas por tópico (JSON vazio, rede, qualidade) — sem clicar de novo. */
 const TOPIC_AUTO_RETRIES = 3
-const TOPIC_RETRY_DELAY_MS = 2500
+const TOPIC_RETRY_DELAY_MS = 3000
 /** Varredura final nos que falharam com erro temporário. */
 const DAY_SWEEP_RETRIES = 2
 
@@ -90,6 +92,17 @@ function sleep(ms) {
 function isTransientGenerationError(err) {
   const code = String(err?.code || '')
   const msg = String(err?.message || err || '').toLowerCase()
+  // NUNCA retry automático em cota/429 — queima créditos de novo
+  if (
+    code === 'quota_exceeded' ||
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('rate limit') ||
+    msg.includes('too many requests')
+  ) {
+    return false
+  }
   // legal_audit_failed NÃO é transitório — regenerar queima cota sem resolver interpretação
   return (
     code === 'ai_empty_response' ||
@@ -108,9 +121,6 @@ function isTransientGenerationError(err) {
     msg.includes('timed out') ||
     msg.includes('network') ||
     msg.includes('fetch') ||
-    msg.includes('429') ||
-    msg.includes('quota') ||
-    msg.includes('resource_exhausted') ||
     msg.includes('overloaded') ||
     msg.includes('unavailable')
   )
@@ -165,12 +175,21 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
   const { verifyContent: verifyOverride, ...rest } = extra
   const defaultVerify =
     rest.contentType === 'material' || (rest.contentType === 'flashcards' && isLegal)
+  const purposeFromType =
+    rest.contentType === 'material'
+      ? 'material'
+      : rest.contentType === 'flashcards'
+        ? 'flashcards'
+        : rest.contentType === 'questoes'
+          ? 'questoes'
+          : 'content'
   return {
     ...TRUSTED_AI,
     forceAudit: false,
     useGoogleSearch: true,
     useRAG: false,
     disciplina,
+    purpose: purposeFromType,
     ...rest,
     isLegalContent: isLegal,
     // Material (e flashcards jurídicos): auditoria pós-geração. Questões: off (JSON + filtro).
@@ -236,9 +255,12 @@ async function processPromptSave(
     disciplina,
   })
 
-  await updateProgress(10, `Gerando ${label} (Google Search automático)…`)
-  const dossier = topicKey
-    ? await getGoogleAiTopicDossierOptional(
+  await updateProgress(10, `Gerando ${label} (dossiê factual)…`)
+  let dossier = null
+  if (topicKey) {
+    try {
+      const { getOrCreateTopicFactualDossier } = await import('./topicFactualDossierService')
+      dossier = await getOrCreateTopicFactualDossier(
         {
           courseId,
           topicKey,
@@ -248,8 +270,28 @@ async function processPromptSave(
         },
         { forceFresh },
       )
-    : null
-  await updateProgress(20, dossier?.text ? `Gerando ${label} com dossiê + Search…` : `Gerando ${label}…`)
+    } catch {
+      dossier = await getGoogleAiTopicDossierOptional(
+        {
+          courseId,
+          topicKey,
+          topicoNome: extra.topico || serverPayload?.savePlan?.topico,
+          disciplina,
+          ...examCtx,
+        },
+        { forceFresh },
+      )
+    }
+  }
+  const richDossier = String(dossier?.text || '').trim().length >= 400
+  await updateProgress(
+    20,
+    richDossier
+      ? `Gerando ${label} com dossiê (sem Search por lote)…`
+      : dossier?.text
+        ? `Gerando ${label} com dossiê + Search…`
+        : `Gerando ${label}…`,
+  )
 
   // Questões: sempre em lotes (evita truncar em ~12 quando o alvo é 50)
   if (topicKey && extra.contentType === 'questoes') {
@@ -279,6 +321,8 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
           isLegalContent: aiOptions.isLegalContent,
           contentType: 'questoes',
           verifyContent: false,
+          // Dossiê rico → sem grounding em cada lote
+          useGoogleSearch: !richDossier,
           generationConfig: aiOptions.generationConfig || {
             maxOutputTokens: 24000,
             temperature: 0.2,
@@ -547,6 +591,7 @@ Retorne APENAS JSON:
     const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
     let batchCards = []
 
+    // Até 3 tentativas por lote se qualidade falhar (1ª falha NÃO abandona o tópico)
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const parsed = await generateAiJson(
         attempt === 1
@@ -805,18 +850,34 @@ async function processSingleMentoradoTopic({
     disciplina,
     topicoNome: topic.topicoNome,
   })
-  await updateProgress(pctBase, `${label}: preparando geração automática…`)
-  const dossierResult = await getGoogleAiTopicDossierOptional(
-    {
-      courseId,
-      topicKey,
-      topicoNome: topic.topicoNome,
-      disciplina,
-      ...examCtx,
-    },
-    { forceFresh },
-  )
-  const googleAiDossier = dossierResult.text || ''
+  await updateProgress(pctBase, `${label}: preparando dossiê factual…`)
+  let dossierResult
+  try {
+    const { getOrCreateTopicFactualDossier } = await import('./topicFactualDossierService')
+    dossierResult = await getOrCreateTopicFactualDossier(
+      {
+        courseId,
+        topicKey,
+        topicoNome: topic.topicoNome,
+        disciplina,
+        ...examCtx,
+      },
+      { forceFresh },
+    )
+  } catch {
+    dossierResult = await getGoogleAiTopicDossierOptional(
+      {
+        courseId,
+        topicKey,
+        topicoNome: topic.topicoNome,
+        disciplina,
+        ...examCtx,
+      },
+      { forceFresh },
+    )
+  }
+  const googleAiDossier = dossierResult?.text || ''
+  const richTopicDossier = googleAiDossier.trim().length >= 400
 
   let materialParsed = null
   let questoesParsed = null
@@ -829,7 +890,7 @@ async function processSingleMentoradoTopic({
   })
   await updateProgress(
     pctBase,
-    `Tópico ${index + 1}/${total}: ${label} — material (Search automático)`,
+    `Tópico ${index + 1}/${total}: ${label} — material (Search + dossiê)`,
   )
 
   const matPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
@@ -844,6 +905,8 @@ async function processSingleMentoradoTopic({
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
           verifyContent: true,
+          // Material: SEMPRE Search (1x) — qualidade igual ao início
+          useGoogleSearch: true,
           courseContext,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
         }),
@@ -876,7 +939,10 @@ async function processSingleMentoradoTopic({
         courseId,
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
+          purpose: 'material_deepen',
           verifyContent: false,
+          // Aprofundamento sem Search extra
+          useGoogleSearch: false,
           courseContext,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
         }),
@@ -912,7 +978,12 @@ async function processSingleMentoradoTopic({
     step: 'questoes',
   })
 
-  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões (Search)`)
+  await updateProgress(
+    pctBase + 3,
+    richTopicDossier
+      ? `Tópico ${index + 1}/${total}: ${label} — questões (dossiê)`
+      : `Tópico ${index + 1}/${total}: ${label} — questões (Search)`,
+  )
   const qPrep = await prepareQuestoesRun({
     courseId,
     topicKey,
@@ -950,6 +1021,7 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
           ...buildTrustedOptions(disciplina, {
             contentType: 'questoes',
             verifyContent: false,
+            useGoogleSearch: !richTopicDossier,
             courseContext,
             generationConfig: { maxOutputTokens: 24000, temperature: 0.15 },
           }),

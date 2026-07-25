@@ -41,6 +41,7 @@ import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
 import AdminPaymentChatbotConfig from '../components/AdminPaymentChatbotConfig'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
+import AdminAiUsageCosts from '../components/admin/AdminAiUsageCosts'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -69,7 +70,7 @@ const MATERIAS = [
   'Administrativo',
   'Legislação Estadual',
   'Realidade de Goiás',
-  'Redação',
+  'Redação'
 ]
 
 
@@ -1329,7 +1330,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               const moduleResponse = await callGeminiWithRetry(modulePrompt, {
                 courseId,
-                models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               const moduleResponseText = extractGeneratedText(moduleResponse)
@@ -1914,15 +1915,16 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
 
       setFlashcardGenProgress('Enviando para IA...')
 
-      // Chamar API
+      // LEGADO: preferir topicoFlashcardsService (material→dossiê→lotes). Mantido com thinking barato.
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' + readEnv('VITE_GEMINI_API_KEY'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 32000
+            temperature: 0.35,
+            maxOutputTokens: 32000,
+            thinkingConfig: { thinkingLevel: 'low' },
           }
         })
       })
@@ -3495,7 +3497,6 @@ REGRAS CRÍTICAS:
       const modelNames = [
         'gemini-3.6-flash',           // Modelo principal atual
         'gemini-3.5-flash',           // Fallback rápido
-        'gemini-3.1-pro-preview'      // Fallback para análises complexas
       ]
       let model = null
       let lastError = null
@@ -3798,30 +3799,16 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                 courseId,
-                models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
             } catch (quotaErr) {
-              // Se for erro de quota, aguardar e tentar novamente
+              // Quota: NÃO aguardar/retentar — queima crédito de novo
               if (isQuotaError(quotaErr)) {
-                const waitTime = extractWaitTime(quotaErr)
-                const waitSeconds = waitTime || 60
-                
-                setFullCourseProgress(`⏳ Quota excedida. Aguardando ${waitSeconds} segundos antes de continuar...`)
-                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                
-                // Tentar novamente
-                flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                  courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
-                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-                })
-                flashcardsText = extractGeneratedText(flashcardsResult).trim()
-                setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
-              } else {
-                throw quotaErr
+                setFullCourseProgress(`⏳ Quota da API esgotada. Interrompendo para não queimar crédito. Tente mais tarde.`)
               }
+              throw quotaErr
             }
             
             // Limpar markdown se houver
@@ -3844,22 +3831,14 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 try {
                   retryResult = await callGeminiWithRetry(flashcardsPrompt, {
                     courseId,
-                    models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                    models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                     generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                   })
                 } catch (retryQuotaErr) {
                   if (isQuotaError(retryQuotaErr)) {
-                    const waitTime = extractWaitTime(retryQuotaErr)
-                    const waitSeconds = waitTime || 60
-                    setFullCourseProgress(`⏳ Quota excedida no retry. Aguardando ${waitSeconds} segundos...`)
-                    await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                    retryResult = await callGeminiWithRetry(flashcardsPrompt, {
-                      models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
-                      generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-                    })
-                  } else {
-                    throw retryQuotaErr
+                    setFullCourseProgress(`⏳ Quota da API esgotada no retry — interrompendo para não queimar crédito.`)
                   }
+                  throw retryQuotaErr
                 }
                 let retryText = extractGeneratedText(retryResult).trim()
                 if (retryText.startsWith('```json')) {
@@ -3981,7 +3960,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       const modelNames = [
         'gemini-3.6-flash',           // Modelo principal atual
         'gemini-3.5-flash',           // Fallback rápido
-        'gemini-3.1-pro-preview'      // Fallback para análises complexas
       ]
       let model = null
       let lastError = null
@@ -4133,7 +4111,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
       const analysisResponse = await callGeminiWithRetry(analysisPrompt, {
         courseId,
-        models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+        models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
         generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
       })
       let analysisText = extractGeneratedText(analysisResponse).trim()
@@ -4265,30 +4243,16 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                 courseId,
-                models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
             } catch (quotaErr) {
-              // Se for erro de quota, aguardar e tentar novamente
+              // Quota: NÃO aguardar/retentar — queima crédito de novo
               if (isQuotaError(quotaErr)) {
-                const waitTime = extractWaitTime(quotaErr)
-                const waitSeconds = waitTime || 60
-                
-                setFullCourseProgress(`⏳ Quota excedida ao gerar flashcards. Aguardando ${waitSeconds} segundos...`)
-                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                
-                // Tentar novamente
-                flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                  courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
-                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-                })
-                flashcardsText = extractGeneratedText(flashcardsResult).trim()
-                setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
-              } else {
-                throw quotaErr
+                setFullCourseProgress(`⏳ Quota da API esgotada ao gerar flashcards. Interrompendo para não queimar crédito.`)
               }
+              throw quotaErr
             }
               
               if (flashcardsText.startsWith('```json')) {
@@ -4857,7 +4821,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para gerar conteúdo técnico completo
-      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash']
       let lastError = null
       let aiResponse = ''
 
@@ -5103,7 +5067,7 @@ CRÍTICO:
       const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para identificar todas as matérias do edital
-      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash']
       let lastError = null
       let materiasList = []
 
@@ -5154,7 +5118,7 @@ CRÍTICO:
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(analysisPrompt, {
             courseId,
-            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+            models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
           let analysisText = extractGeneratedText(result).trim()
@@ -5478,7 +5442,7 @@ CRÍTICO:
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+    const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash']
     let lastError = null
     let materiasList = []
 
@@ -5502,7 +5466,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
         // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
         const result = await callGeminiWithRetry(analysisPrompt, {
           courseId,
-          models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+          models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
         let analysisText = extractGeneratedText(result).trim()
@@ -5578,7 +5542,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+    const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash']
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
@@ -5601,7 +5565,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
         // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
         const result = await callGeminiWithRetry(analysisPrompt, {
           courseId,
-          models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+          models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
         let analysisText = extractGeneratedText(result).trim()
@@ -5675,7 +5639,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       const concursoName = unifiedData.concursoName || ''
 
       // 3. Chamar IA para identificar todas as matérias do edital
-      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash']
       let lastError = null
       let materiasList = []
 
@@ -5726,7 +5690,7 @@ CRÍTICO:
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(analysisPrompt, {
             courseId,
-            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+            models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
           let analysisText = extractGeneratedText(result).trim()
@@ -6509,7 +6473,7 @@ CRÍTICO:
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(systemPrompt, {
             courseId: courseIdForGeneration,
-            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+            models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
             generationConfig: { temperature: 0.35, maxOutputTokens: 8000 },
           })
           
@@ -6889,8 +6853,11 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       const response = await callGeminiWithRetry(prompt, {
         courseId: selectedCourseForFlashcards || 'alego-default',
+        useGoogleSearch: false,
+        verifyContent: false,
+        thinkingLevel: 'minimal',
         generationConfig: {
-          maxOutputTokens: 32000,
+          maxOutputTokens: 1024,
           temperature: 0.35,
         },
       })
@@ -6969,6 +6936,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
   const tabs = [
     { id: 'config', label: '⚙️ Configurações', icon: '⚙️' },
+    { id: 'ai-costs', label: '💰 Custos API', icon: '💰' },
     { id: 'flashcards', label: '📚 Flashcards', icon: '📚' },
     { id: 'users', label: '👥 Usuários', icon: '👥' },
     { id: 'edital', label: '📋 Edital Verticalizado', icon: '📋' },
@@ -6985,7 +6953,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'guia-mentorado', label: '📅 Guia Mentorado', icon: '📅' },
     { id: 'professor-fiscalizador', label: '🎓 Professor IA', icon: '🎓' },
     { id: 'generation-jobs', label: '⚡ Jobs locais', icon: '⚡' },
-    { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
+    { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' }
   ]
   
   // Estado para gerenciar simulados compartilhados
@@ -7190,6 +7158,15 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                             Verificar Status da I.A.
                           </>
                         )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('ai-costs')}
+                        className="px-4 py-3 bg-gradient-to-r from-teal-500 to-emerald-700 text-white rounded-xl font-bold hover:from-teal-600 hover:to-emerald-800 transition shadow-lg flex items-center gap-2"
+                        title="Tokens e custo estimado das chamadas Gemini"
+                      >
+                        <span aria-hidden>💰</span>
+                        Custos da API
                       </button>
                     </div>
                   </div>
@@ -7714,7 +7691,7 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
                             // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                             const verticalizadoResponse = await callGeminiWithRetry(verticalizadoPrompt, {
                               courseId,
-                              models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                              models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                               generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                             })
                             let verticalizadoText = extractGeneratedText(verticalizadoResponse).trim()
@@ -8066,7 +8043,7 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                           const unifiedResponse = await callGeminiWithRetry(unifiedPrompt, {
                             courseId,
-                            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                            models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                           })
                           let unifiedText = extractGeneratedText(unifiedResponse).trim()
@@ -9250,7 +9227,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                 const response = await callGeminiWithRetry(prompt, {
                   courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                  models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 const text = extractGeneratedText(response)
@@ -13399,6 +13376,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
 
             {activeTab === 'generation-jobs' && <AdminGenerationJobs />}
+
+            {activeTab === 'ai-costs' && <AdminAiUsageCosts />}
           </div>
         </div>
 
@@ -13538,16 +13517,29 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             </div>
 
             <div className="p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Total de keys verificadas: {aiKeysStatus.length}
                 </p>
-                <button
-                  onClick={() => setShowAiStatusModal(false)}
-                  className="px-6 py-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
-                >
-                  Fechar
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAiStatusModal(false)
+                      setActiveTab('ai-costs')
+                    }}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    Ver custos da API
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiStatusModal(false)}
+                    className="px-6 py-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </div>
           </div>

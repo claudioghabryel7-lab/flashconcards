@@ -22,6 +22,15 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import {
+  getOrCreateGeminiContextCache,
+  generateWithCachedContext,
+} from '../utils/geminiContextCache'
+import {
+  getPreferredChatModel,
+  rememberChatModel,
+  listChatModelFallbacks,
+} from '../utils/geminiModelPick'
 
 const MATERIAS = [
   'Português',
@@ -43,7 +52,7 @@ const FloatingAIChat = () => {
   const [sending, setSending] = useState(false)
   const [availableModel, setAvailableModel] = useState(null)
   const [modelError, setModelError] = useState(null)
-  const [initialMessageSent, setInitialMessageSent] = useState(false)
+  const [initialMessageSent, setInitialMessageSent] = useState(true)
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const [quotaCooldown, setQuotaCooldown] = useState(0) // Tempo restante de cooldown por quota
   const [quotaDailyLimit, setQuotaDailyLimit] = useState(false) // Limite diário atingido
@@ -284,147 +293,28 @@ const FloatingAIChat = () => {
     return () => unsub()
   }, [user, isOpen])
 
-  // Descobrir modelo disponível (executar apenas uma vez)
+  // Modelo de chat: allowlist + sessionStorage — SEM probe generateContent
   useEffect(() => {
-    if (availableModel) return // Já tem modelo, não precisa procurar novamente
-    
-    const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        console.warn('⚠️ VITE_GEMINI_API_KEY não configurada')
-        setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
-        return
-      }
-
-      console.log('🔍 Procurando modelo disponível...')
-      
-      // Tentar modelos conhecidos diretamente (mais rápido) - apenas os que funcionam
-      const knownModels = [
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-3.1-pro-preview',
-        'gemini-flash-latest',
-        'gemini-pro-latest',
-      ]
-      const genAI = new GoogleGenerativeAI(apiKey)
-      
-      for (const modelName of knownModels) {
-        try {
-          console.log(`🧪 Testando modelo: ${modelName}`)
-          const model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({
-            contents: [{ parts: [{ text: 'test' }] }],
-          })
-          console.log(`✅ Modelo encontrado: ${modelName}`)
-          setAvailableModel(modelName)
-          return
-        } catch (err) {
-          console.log(`❌ Modelo ${modelName} não disponível:`, err.message)
-          continue
-        }
-      }
-      
-      // Se nenhum modelo conhecido funcionou, tentar listar da API
-      console.log('🔍 Listando modelos da API...')
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          console.error('❌ Erro ao listar modelos:', response.status)
-          setModelError('Erro ao conectar com a API do Gemini')
-          return
-        }
-
-        const data = await response.json()
-        const models = data.models || []
-        const generateModels = models.filter((model) => {
-          return (model.supportedGenerationMethods || []).includes('generateContent')
-        })
-
-        if (generateModels.length === 0) {
-          console.warn('⚠️ Nenhum modelo com generateContent encontrado')
-          setModelError('Nenhum modelo disponível')
-          return
-        }
-
-        // Tentar cada modelo da lista
-        for (const modelData of generateModels) {
-          try {
-            const testModelName = modelData.name.replace('models/', '')
-            const testModel = genAI.getGenerativeModel({ model: testModelName })
-            await testModel.generateContent({
-              contents: [{ parts: [{ text: 'test' }] }],
-            })
-            console.log(`✅ Modelo encontrado: ${testModelName}`)
-            setAvailableModel(testModelName)
-            return
-          } catch {
-            continue
-          }
-        }
-        
-        console.warn('⚠️ Nenhum modelo funcionou')
-        setModelError('Nenhum modelo disponível funcionou')
-      } catch (err) {
-        console.error('❌ Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API do Gemini. Verifique sua conexão e API key.')
-      }
-    }
-
-    findAvailableModel()
-  }, []) // Array vazio - executar apenas uma vez
-
-  // Gerar análise inicial quando abrir o chat (apenas uma vez)
-  useEffect(() => {
-    if (!isOpen || !user) return
-    
-    // Se já tem mensagens, não enviar análise inicial novamente
-    if (messages.length > 0) {
-      setInitialMessageSent(true)
+    if (availableModel) return
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
+    if (!apiKey) {
+      setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
       return
     }
-    
-    // Se já enviou, não enviar novamente
-    if (initialMessageSent) return
-    
-    // Aguardar modelo estar disponível
-    if (!availableModel) {
-      console.log('⏳ Aguardando modelo estar disponível...')
+    const model = getPreferredChatModel() || listChatModelFallbacks()[0]
+    if (!model) {
+      setModelError('Nenhum modelo de chat configurado')
       return
     }
+    console.log('✅ Modelo de chat (sem probe):', model)
+    setAvailableModel(model)
+    rememberChatModel(model)
+  }, [availableModel])
 
-    console.log('✅ Preparando análise inicial...', {
-      totalDays: studyStats.totalDays,
-      cardProgressKeys: Object.keys(cardProgress).length,
-      allCardsLength: allCards.length
-    })
-
-    const generateInitialAnalysis = async () => {
-      try {
-        console.log('🚀 Gerando análise inicial...')
-        setInitialMessageSent(true)
-        const analysis = await analyzeProgress()
-        console.log('📊 Análise gerada, tamanho:', analysis.length, 'caracteres')
-        console.log('📤 Enviando análise para IA...')
-        await sendAIMessage(analysis, true)
-        console.log('✅ Análise enviada com sucesso!')
-      } catch (err) {
-        console.error('❌ Erro ao gerar análise inicial:', err)
-        setInitialMessageSent(false) // Permitir tentar novamente
-      }
-    }
-
-    // Aguardar um pouco para garantir que os dados estão carregados
-    const timer = setTimeout(() => {
-      if (messages.length === 0 && !initialMessageSent && availableModel) {
-        generateInitialAnalysis()
-      }
-    }, 2000)
-
-    return () => clearTimeout(timer)
-  }, [isOpen, user, availableModel, initialMessageSent, messages.length])
+  // Sem análise automática ao abrir (1 chamada cara por open). Libera input imediatamente.
+  useEffect(() => {
+    setInitialMessageSent(true)
+  }, [])
 
   // Analisar progresso e gerar texto
   const analyzeProgress = async () => {
@@ -652,16 +542,18 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
           // Isso garante que informações importantes (datas, requisitos) sejam incluídas
           let limitedPdfText = ''
           const totalLength = pdfText.length
-          if (totalLength <= 50000) {
-            // PDF pequeno/médio: usar tudo
+          // Cap ~18k chars: edital completo a cada mensagem estourava input tokens
+          const MAX_PDF_CHARS = 18000
+          if (totalLength <= MAX_PDF_CHARS) {
             limitedPdfText = pdfText
             console.log('✅ Usando PDF completo:', totalLength, 'caracteres')
           } else {
-            // PDF grande: início (40000) + fim (10000)
-            const inicio = pdfText.substring(0, 40000)
-            const fim = pdfText.substring(totalLength - 10000)
-            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - 50000} caracteres) ...]\n\n${fim}`
-            console.log('📄 PDF grande: usando início (40000) + fim (10000) =', inicio.length + fim.length, 'caracteres')
+            const head = 14000
+            const tail = 4000
+            const inicio = pdfText.substring(0, head)
+            const fim = pdfText.substring(totalLength - tail)
+            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - MAX_PDF_CHARS} caracteres) ...]\n\n${fim}`
+            console.log('📄 PDF grande: usando início+fim =', head + tail, 'caracteres')
           }
           
           editalContext += `📄 CONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA:\n`
@@ -686,7 +578,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
         console.warn('⚠️ Nenhum edital/PDF carregado para o chat')
       }
 
-      const mentorPrompt = `Você é o "Flash Mentor", mentor ${courseName}.
+      const systemPrefix = `Você é o "Flash Mentor", mentor ${courseName}.
 
 REGRAS DE RESPOSTA:
 - Respostas COMPLETAS e OBJETIVAS: 3-6 frases bem formadas
@@ -702,33 +594,60 @@ INSTRUÇÕES CRÍTICAS:
 2. PROCURE a informação no edital/PDF antes de dizer que não sabe
 3. Se a informação estiver no edital/PDF, você DEVE usá-la na resposta
 4. NUNCA diga "não há informação" se a informação estiver no edital/PDF
-5. Se perguntarem sobre:
-   - Datas → procure no edital/PDF
-   - Número de questões → procure no edital/PDF
-   - Tópicos de matérias → procure no edital/PDF
-   - Requisitos → procure no edital/PDF
-   - Qualquer coisa sobre o concurso → procure no edital/PDF primeiro
+5. Se perguntarem sobre datas, nº de questões, tópicos, requisitos → use o edital/PDF
 
-MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucional, Administrativo, Legislação Estadual, Realidade de Goiás, Redação.
+MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucional, Administrativo, Legislação Estadual, Realidade de Goiás, Redação.`
 
-Pergunta do aluno: ${userMessage}
+      const userTurn = `Pergunta do aluno: ${userMessage}
 
-⚠️ Lembre-se: Leia o edital/PDF acima ANTES de responder!`
+⚠️ Leia o edital/PDF do contexto ANTES de responder!`
+      const mentorPrompt = `${systemPrefix}\n\n${userTurn}`
+
+      const chatGenConfig = {
+        temperature: 0.7,
+        maxOutputTokens: 600,
+        topP: 0.9,
+        topK: 40,
+        thinkingConfig: { thinkingLevel: 'minimal' },
+      }
 
       // Tentar gerar resposta com Gemini primeiro
       let result = null
       let useGroqFallback = false
       
       try {
-        result = await model.generateContent({
-          contents: [{ parts: [{ text: mentorPrompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 800,
-            topP: 0.9,
-            topK: 40,
-          },
-        })
+        // Context Cache: não reenviar edital/PDF inteiro a cada mensagem
+        let usedCache = false
+        if (editalContext && editalContext.length >= 4000) {
+          const cacheName = await getOrCreateGeminiContextCache({
+            apiKey,
+            model: availableModel,
+            prefixText: systemPrefix,
+            ttl: '3600s',
+          })
+          if (cacheName) {
+            const cached = await generateWithCachedContext({
+              apiKey,
+              model: availableModel,
+              cachedContentName: cacheName,
+              userText: userTurn,
+              generationConfig: chatGenConfig,
+            })
+            if (cached?.candidates?.length) {
+              // SDK shape: result.response.candidates
+              result = { response: cached }
+              usedCache = true
+              console.log('✅ Resposta via Context Cache (edital não reenviado)')
+            }
+          }
+        }
+
+        if (!usedCache) {
+          result = await model.generateContent({
+            contents: [{ parts: [{ text: mentorPrompt }] }],
+            generationConfig: chatGenConfig,
+          })
+        }
       } catch (apiErr) {
         // Capturar erro de forma mais robusta
         const errorMessage = apiErr.message || String(apiErr) || ''
@@ -827,7 +746,8 @@ Pergunta do aluno: ${userMessage}
           
           if (candidate.content && candidate.content.parts) {
             text = candidate.content.parts
-              .map(part => part.text || '')
+              .filter((part) => part && typeof part.text === 'string' && !part.thought)
+              .map((part) => part.text)
               .join('')
               .trim()
           }
@@ -1168,7 +1088,7 @@ O chat estará disponível novamente amanhã ou após configurar um plano pago.`
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={quotaDailyLimit ? "Limite diário atingido. Tente amanhã." : (initialMessageSent ? "Pergunte ao seu mentor..." : "Aguardando análise...")}
+                placeholder={quotaDailyLimit ? "Limite diário atingido. Tente amanhã." : "Pergunte ao seu mentor..."}
                 disabled={sending || !availableModel || !initialMessageSent || quotaDailyLimit || quotaCooldown > 0}
                 className={`flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none disabled:opacity-50 ${
                   darkMode

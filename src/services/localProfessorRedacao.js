@@ -73,7 +73,9 @@ Retorne APENAS JSON:
     courseId,
     trustedGeneration: false,
     useGoogleSearch: true,
-    generationConfig: { maxOutputTokens: 16384, temperature: 0.55 },
+    thinkingLevel: 'minimal',
+    // Tema + guia curto — 16k era desperdício
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.55 },
   })
 
   const tema = String(parsed?.tema || '').trim()

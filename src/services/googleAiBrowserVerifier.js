@@ -215,12 +215,37 @@ export async function getGoogleAiTopicDossier(meta = {}, { forceFresh = false } 
   return { text, cached: false }
 }
 
-/** Nunca bloqueia a geração: tenta app web admin → ponte → segue sem dossiê. */
+/** Nunca bloqueia a geração: tenta Firestore → local → app web admin → ponte → segue sem dossiê. */
 export async function getGoogleAiTopicDossierOptional(meta = {}, options = {}) {
   try {
+    if (!options.forceFresh && !options.skipFirestore) {
+      try {
+        const { readFirestoreTopicDossier, writeFirestoreTopicDossier } = await import(
+          './topicFactualDossierService'
+        )
+        const fromFs = await readFirestoreTopicDossier(meta)
+        if (fromFs?.text) {
+          writeCache(meta, fromFs.text)
+          return { text: fromFs.text, cached: true, source: 'firestore' }
+        }
+      } catch {
+        // ignora
+      }
+    }
+
     if (!options.forceFresh) {
       const cached = readCache(meta)
-      if (cached) return { text: cached, cached: true }
+      if (cached) {
+        // Promoove cache local → Firestore (compartilha entre abas/admins)
+        if (!options.skipFirestore) {
+          import('./topicFactualDossierService')
+            .then(({ writeFirestoreTopicDossier }) =>
+              writeFirestoreTopicDossier(meta, cached, 'local_cache'),
+            )
+            .catch(() => {})
+        }
+        return { text: cached, cached: true, source: 'local' }
+      }
     }
 
     // App interno /admin/modo-ia — busca Google pelo browser do admin (sem download)
@@ -232,7 +257,14 @@ export async function getGoogleAiTopicDossierOptional(meta = {}, options = {}) {
       })
       if (web?.text && web.text.length >= 120) {
         writeCache(meta, web.text)
-        return { text: web.text, cached: false, source: web.source }
+        if (!options.skipFirestore) {
+          import('./topicFactualDossierService')
+            .then(({ writeFirestoreTopicDossier }) =>
+              writeFirestoreTopicDossier(meta, web.text, web.source || 'google_web'),
+            )
+            .catch(() => {})
+        }
+        return { text: web.text, cached: Boolean(web.cached), source: web.source }
       }
     } catch {
       // continua
@@ -240,7 +272,15 @@ export async function getGoogleAiTopicDossierOptional(meta = {}, options = {}) {
 
     const bridge = await detectGoogleAiBridge()
     if (!bridge.available) return { text: '', cached: false, skipped: true }
-    return await getGoogleAiTopicDossier(meta, options)
+    const bridgeResult = await getGoogleAiTopicDossier(meta, options)
+    if (bridgeResult?.text && !options.skipFirestore) {
+      import('./topicFactualDossierService')
+        .then(({ writeFirestoreTopicDossier }) =>
+          writeFirestoreTopicDossier(meta, bridgeResult.text, 'bridge'),
+        )
+        .catch(() => {})
+    }
+    return bridgeResult
   } catch {
     return { text: '', cached: false, skipped: true }
   }

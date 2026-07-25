@@ -293,7 +293,10 @@ REGRAS OBRIGATÓRIAS:
       trustedGeneration: true,
       isLegalContent: true,
       useGoogleSearch: true,
-      generationConfig: { maxOutputTokens: 8000, temperature: 0.15 },
+      thinkingLevel: 'low',
+      verifyContent: false,
+      // Patch mínimo — 8k era excessivo por flag
+      generationConfig: { maxOutputTokens: 3000, temperature: 0.15 },
     },
   )
 

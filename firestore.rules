@@ -273,6 +273,12 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow create, update, delete: if isAdmin();
       }
+
+      /** Dossiês factuais por tópico (cache de pesquisa — economia de API) */
+      match /aiDossiers/{dossierId} {
+        allow read: if isAdmin();
+        allow create, update, delete: if isAdmin();
+      }
       
       match /materialApoio/{docId} {
         allow read: if isAuthenticated() && 
@@ -693,6 +699,23 @@ service cloud.firestore {
       allow create: if true;
       allow update: if request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['completed', 'acertos', 'erros', 'aproveitamento', 'totalQuestoes', 'completedAt']);
+      allow delete: if isAdmin();
+    }
+
+    /** Telemetria de tokens/custo Gemini (painel admin) */
+    match /aiUsageEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'provider', 'model', 'totalTokens', 'estimatedUsd', 'dayKey', 'userId', 'createdAtMs'
+        ]);
+      allow update, delete: if isAdmin();
+    }
+
+    match /aiUsageDaily/{dayId} {
+      allow read: if isAdmin();
+      allow create, update: if isAuthenticated();
       allow delete: if isAdmin();
     }
     

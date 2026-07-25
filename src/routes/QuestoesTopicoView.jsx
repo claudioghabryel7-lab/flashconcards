@@ -639,8 +639,26 @@ REGRAS:
 
       setProgress((prev) => Math.min(prev + 10, 40))
       console.log('🤖 [Questões Tópico] Gerando em lotes no formato', tipoLabel)
+
+      const { getOrCreateTopicFactualDossier, hasRichDossier } = await import(
+        '../services/topicFactualDossierService'
+      )
+      const { appendGoogleAiDossier } = await import('../services/googleAiBrowserVerifier')
+      const dossier = await getOrCreateTopicFactualDossier({
+        courseId: resolvedCourseId,
+        topicKey: resolvedTopicKey,
+        topicoNome: effectiveTopicNome || resolvedTopicKey,
+        disciplina: contextoDisciplina?.disciplina || '',
+        banca: exam.banca,
+        cargo: exam.cargo,
+        concursoName: exam.concursoName || courseName,
+      })
+      const richDossier = hasRichDossier(dossier)
+      const buildBatchPromptWithDossier = (args) =>
+        appendGoogleAiDossier(buildBatchPrompt(args), dossier?.text)
+
       const batchResult = await generateQuestoesInBatches({
-        buildBatchPrompt,
+        buildBatchPrompt: buildBatchPromptWithDossier,
         total: 50,
         batchSize: 10,
         examCtx: exam,
@@ -649,8 +667,9 @@ REGRAS:
           isLegalContent: true,
           useRAG: false,
           trustedGeneration: true,
-          useGoogleSearch: true,
+          useGoogleSearch: !richDossier,
           verifyContent: false,
+          thinkingLevel: 'low',
         },
         onBatchProgress: async ({ batchNumber, batches, generated, total }) => {
           const pct = 40 + Math.round((generated / total) * 45)

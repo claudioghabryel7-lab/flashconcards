@@ -19,6 +19,11 @@ import {
   saveMaterialCheckpoint,
 } from './localGenerationCheckpoint'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
+import {
+  getOrCreateTopicFactualDossier,
+  hasRichDossier,
+} from './topicFactualDossierService'
+import { appendGoogleAiDossier } from './googleAiBrowserVerifier'
 
 /**
  * Retorna material existente se completo; senão gera, salva e devolve.
@@ -109,14 +114,31 @@ export async function ensureMaterialForTopico({
     topicoNome: topicoNome || normalizedTopicKey,
   })
 
-  await onProgress(25, 'Gerando material de apoio do tópico…')
-  let parsed = await generateAiJson(prompt, {
+  await onProgress(18, 'Montando dossiê factual do tópico…')
+  const dossier = await getOrCreateTopicFactualDossier({
+    courseId: resolvedId,
+    topicKey: normalizedTopicKey,
+    topicoNome: topicoNome || normalizedTopicKey,
+    disciplina,
+    banca: examCtx.banca,
+    cargo: examCtx.cargo,
+    concursoName: examCtx.concursoName,
+  })
+  const richDossier = hasRichDossier(dossier)
+  const promptWithDossier = appendGoogleAiDossier(prompt, dossier?.text)
+
+  await onProgress(25, 'Gerando material com Search + dossiê (qualidade máxima)…')
+  let parsed = await generateAiJson(promptWithDossier, {
     courseId: resolvedId,
     trustedGeneration: true,
+    // Material: SEMPRE Search (1x) + dossiê — qualidade igual ao início
     useGoogleSearch: true,
-    verifyContent: true,
+    // Auditoria pós em material jurídico (sem 2º grounding — geminiApi desliga Search no verify)
+    verifyContent: isLegal,
     isLegalContent: isLegal,
     useRAG: false,
+    thinkingLevel: 'low',
+    purpose: 'material',
     maxContinues: 4,
     courseContext,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
@@ -142,9 +164,12 @@ export async function ensureMaterialForTopico({
     generateOptions: {
       courseId: resolvedId,
       trustedGeneration: true,
-      useGoogleSearch: true,
+      // Aprofundamento: sem Search extra (fatos já no material/dossiê)
+      useGoogleSearch: false,
       verifyContent: false,
       isLegalContent: isLegal,
+      thinkingLevel: 'low',
+      purpose: 'material_deepen',
       courseContext,
       generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
     },

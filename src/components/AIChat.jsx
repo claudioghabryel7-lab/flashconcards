@@ -18,6 +18,11 @@ import { PaperAirplaneIcon } from '@heroicons/react/24/solid'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import {
+  getPreferredChatModel,
+  rememberChatModel,
+  listChatModelFallbacks,
+} from '../utils/geminiModelPick'
 
 const MATERIAS = [
   'Português',
@@ -177,84 +182,23 @@ const AIChat = () => {
   }, [user, profile])
 
   // Descobrir qual modelo está disponível
+  // Modelo de chat sem probe pago
   useEffect(() => {
-    const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey || availableModel) return
-
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          throw new Error('Não foi possível listar modelos')
-        }
-
-        const data = await response.json()
-        const models = data.models || []
-        
-        const preferred = [
-          'gemini-3.6-flash',
-          'gemini-3.5-flash',
-          'gemini-3.1-pro-preview',
-          'gemini-flash-latest',
-          'gemini-pro-latest',
-        ]
-        const generateModels = models
-          .filter((model) => {
-            const methods = model.supportedGenerationMethods || []
-            return methods.includes('generateContent')
-          })
-          .sort((a, b) => {
-            const an = a.name.replace('models/', '')
-            const bn = b.name.replace('models/', '')
-            const ai = preferred.indexOf(an)
-            const bi = preferred.indexOf(bn)
-            if (ai === -1 && bi === -1) return 0
-            if (ai === -1) return 1
-            if (bi === -1) return -1
-            return ai - bi
-          })
-
-        if (generateModels.length === 0) {
-          setModelError('Nenhum modelo de geração disponível. Verifique sua API key.')
-          return
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const modelName = generateModels[0].name.replace('models/', '')
-        
-        try {
-          const model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({
-            contents: [{ parts: [{ text: 'test' }] }],
-          })
-          setAvailableModel(modelName)
-        } catch (testErr) {
-          for (let i = 1; i < generateModels.length; i++) {
-            try {
-              const testModelName = generateModels[i].name.replace('models/', '')
-              const testModel = genAI.getGenerativeModel({ model: testModelName })
-              await testModel.generateContent({
-                contents: [{ parts: [{ text: 'test' }] }],
-              })
-              setAvailableModel(testModelName)
-              return
-            } catch (err) {
-              continue
-            }
-          }
-          setModelError('Nenhum modelo funcionou. Verifique sua API key e permissões.')
-        }
-      } catch (err) {
-        console.error('Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API. Verifique sua API key.')
-      }
+    if (availableModel) return
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
+    if (!apiKey) {
+      setModelError('API key do Gemini não configurada.')
+      return
     }
-
-    findAvailableModel()
+    const model = getPreferredChatModel() || listChatModelFallbacks()[0]
+    if (!model) {
+      setModelError('Nenhum modelo de chat configurado')
+      return
+    }
+    setAvailableModel(model)
+    rememberChatModel(model)
   }, [availableModel])
+
 
   // Chamar Groq API como fallback
   const callGroqAPI = async (prompt) => {
@@ -406,16 +350,17 @@ const AIChat = () => {
           // Isso garante que informações importantes (datas, requisitos) sejam incluídas
           let limitedPdfText = ''
           const totalLength = pdfText.length
-          if (totalLength <= 50000) {
-            // PDF pequeno/médio: usar tudo
+          const MAX_PDF_CHARS = 18000
+          if (totalLength <= MAX_PDF_CHARS) {
             limitedPdfText = pdfText
             console.log('✅ Usando PDF completo:', totalLength, 'caracteres')
           } else {
-            // PDF grande: início (40000) + fim (10000)
-            const inicio = pdfText.substring(0, 40000)
-            const fim = pdfText.substring(totalLength - 10000)
-            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - 50000} caracteres) ...]\n\n${fim}`
-            console.log('📄 PDF grande: usando início (40000) + fim (10000) =', inicio.length + fim.length, 'caracteres')
+            const head = 14000
+            const tail = 4000
+            const inicio = pdfText.substring(0, head)
+            const fim = pdfText.substring(totalLength - tail)
+            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - MAX_PDF_CHARS} caracteres) ...]\n\n${fim}`
+            console.log('📄 PDF grande: usando início+fim =', head + tail, 'caracteres')
           }
           
           editalContext += `📄 CONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA:\n`
@@ -501,8 +446,9 @@ Pergunta do aluno: ${userMessage}
             contents: [{ parts: [{ text: fullPrompt }] }],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 300, // Respostas curtas
+              maxOutputTokens: 300,
               topP: 0.9,
+              thinkingConfig: { thinkingLevel: 'minimal' },
             },
           })
           break // Sucesso

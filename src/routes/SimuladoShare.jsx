@@ -617,7 +617,14 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-3.6-flash',
+        generationConfig: {
+          maxOutputTokens: 512,
+          temperature: 0.5,
+          thinkingConfig: { thinkingLevel: 'minimal' },
+        },
+      })
 
       const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
 
@@ -682,7 +689,14 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-3.6-flash',
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.3,
+          thinkingConfig: { thinkingLevel: 'minimal' },
+        },
+      })
 
       // Validar tamanho mínimo
       const wordCount = redacaoTexto.trim().split(/\s+/).length

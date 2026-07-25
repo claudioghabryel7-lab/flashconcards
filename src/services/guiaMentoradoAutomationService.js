@@ -184,6 +184,8 @@ export async function startGuiaMentoradoCronogramaGeneration({ userId, courseId,
     topicKey: null,
     metadata: {
       autoGerarConteudo: Boolean(config?.autoGerarConteudo),
+      source: 'automation',
+      automation: true,
     },
     runOnServer: false,
     serverPayload: {
@@ -314,6 +316,8 @@ export async function startMentoradoDayContentAutomation({
         targetDate,
         autoPublish,
         disciplinas: prepared.items.map((i) => i.disciplinaNome),
+        source: 'automation',
+        automation: true,
       },
       runOnServer: false,
       serverPayload: {
@@ -342,6 +346,8 @@ export async function startMentoradoDayContentAutomation({
       topicCount: prepared.topicCount,
       targetDate,
       autoPublish,
+      source: 'automation',
+      automation: true,
     },
     runOnServer: false,
     serverPayload: {
@@ -369,6 +375,7 @@ export async function startMentoradoBackfillJob({ userId, courseId, dayKeys = nu
     topicKey: null,
     metadata: {
       source: 'backfill',
+      automation: true,
       dayCount: Array.isArray(dayKeys) ? dayKeys.length : null,
     },
     runOnServer: false,
