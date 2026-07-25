@@ -13517,16 +13517,29 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             </div>
 
             <div className="p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Total de keys verificadas: {aiKeysStatus.length}
                 </p>
-                <button
-                  onClick={() => setShowAiStatusModal(false)}
-                  className="px-6 py-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
-                >
-                  Fechar
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAiStatusModal(false)
+                      setActiveTab('ai-costs')
+                    }}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    Ver custos da API
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiStatusModal(false)}
+                    className="px-6 py-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
