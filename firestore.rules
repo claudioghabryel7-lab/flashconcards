@@ -273,6 +273,12 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow create, update, delete: if isAdmin();
       }
+
+      /** Dossiês factuais por tópico (cache de pesquisa — economia de API) */
+      match /aiDossiers/{dossierId} {
+        allow read: if isAdmin();
+        allow create, update, delete: if isAdmin();
+      }
       
       match /materialApoio/{docId} {
         allow read: if isAuthenticated() && 

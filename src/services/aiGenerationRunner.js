@@ -82,6 +82,7 @@ export async function startBackgroundGeneration({
   task,
   serverPayload = null,
   runOnServer: _runOnServer = false,
+  ignoreAiBudget = false,
 }) {
   if (!userId) {
     throw new Error('Usuário não autenticado para geração em segundo plano.')
@@ -91,6 +92,31 @@ export async function startBackgroundGeneration({
   const hasPayload = Boolean(serverPayload)
   if (!hasTask && !hasPayload) {
     throw new Error('Task ou serverPayload é obrigatório.')
+  }
+
+  // Limite horário só para automações (não bloqueia clique manual do admin)
+  const automationSource = String(metadata?.source || metadata?.kind || '')
+  const isAutomation =
+    metadata?.automation === true ||
+    /admin_online|content_automation|backfill|automation|catch-?up/i.test(automationSource)
+
+  let budgetRecorder = null
+  if (!ignoreAiBudget && isAutomation && typeof window !== 'undefined') {
+    try {
+      const { checkAdminAiBudget, recordAdminAiJobStart } = await import('./adminAiBudget')
+      const budget = checkAdminAiBudget(jobType)
+      if (!budget.ok) {
+        const err = new Error(
+          `Limite de gerações automáticas atingido (${budget.used}/${budget.limit}/h). Aguarde ~${budget.retryAfterSec}s.`,
+        )
+        err.code = 'ai_budget_exceeded'
+        err.retryAfterSec = budget.retryAfterSec
+        throw err
+      }
+      budgetRecorder = () => recordAdminAiJobStart(jobType)
+    } catch (budgetErr) {
+      if (budgetErr?.code === 'ai_budget_exceeded') throw budgetErr
+    }
   }
 
   const fingerprint = buildGenerationJobFingerprint({
@@ -149,6 +175,12 @@ export async function startBackgroundGeneration({
       serverPayload: null,
       runOnServer: false,
     })
+
+    try {
+      budgetRecorder?.()
+    } catch {
+      // ignore
+    }
 
     const localTask =
       hasTask

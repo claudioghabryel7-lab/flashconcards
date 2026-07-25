@@ -661,22 +661,38 @@ REGRAS FINAIS:
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`
 
       setProgress((prev) => Math.min(prev + 15, 70))
+      const { getOrCreateTopicFactualDossier, hasRichDossier } = await import(
+        '../services/topicFactualDossierService'
+      )
+      const { appendGoogleAiDossier } = await import('../services/googleAiBrowserVerifier')
+      const dossier = await getOrCreateTopicFactualDossier({
+        courseId: resolvedCourseId,
+        topicKey: resolvedTopicKey,
+        topicoNome: effectiveTopicNome || resolvedTopicKey,
+        disciplina: exam.disciplina || '',
+        banca: exam.banca,
+        cargo: exam.cargo,
+        concursoName: exam.concursoName,
+      })
+      const richDossier = hasRichDossier(dossier)
+      const promptWithDossier = appendGoogleAiDossier(prompt, dossier?.text)
+
       const genOpts = {
         courseId: resolvedCourseId,
         isLegalContent: true,
         useRAG: false,
         trustedGeneration: true,
-        useGoogleSearch: true,
+        useGoogleSearch: !richDossier,
         // Verify jurídico sem 2º grounding (geminiApi: verifyWithSearch=false se já grounded)
         verifyContent: true,
         thinkingLevel: 'low',
         maxContinues: 4,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       }
-      let parsed = await generateAiJson(prompt, genOpts)
+      let parsed = await generateAiJson(promptWithDossier, genOpts)
       parsed = await ensureMaterialContentComplete(parsed, {
         generateAiJson,
-        generateOptions: genOpts,
+        generateOptions: { ...genOpts, useGoogleSearch: !richDossier },
         context: {
           topico: effectiveTopicNome || resolvedTopicKey,
           banca: exam.banca,

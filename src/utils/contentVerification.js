@@ -94,13 +94,16 @@ export function shouldRunVerification(text = '', options = {}) {
   if (options.verifyContent === false) return false
   if (!text || text.length < 80) return false
   if (options.isLegalContent === false) return false
-  // Com verifyContent explícito + disciplina jurídica: sempre audita
-  if (options.verifyContent === true && options.isLegalContent === true) return true
+
   const hasLegalSignal = LEGAL_CLAIM_PATTERNS.some((p) => {
     const re = new RegExp(p.source, p.flags)
     return re.test(text)
   })
-  return hasLegalSignal || options.isLegalContent === true
+
+  // Economia: só audita quando há citação jurídica concreta (lei/artigo/súmula…).
+  // forceVerify: true ignora o filtro (casos raros).
+  if (options.forceVerify === true) return true
+  return hasLegalSignal
 }
 
 export function applyVerificationToResponse(response, verification, originalText) {

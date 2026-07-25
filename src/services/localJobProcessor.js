@@ -246,9 +246,12 @@ async function processPromptSave(
     disciplina,
   })
 
-  await updateProgress(10, `Gerando ${label} (Google Search automático)…`)
-  const dossier = topicKey
-    ? await getGoogleAiTopicDossierOptional(
+  await updateProgress(10, `Gerando ${label} (dossiê factual)…`)
+  let dossier = null
+  if (topicKey) {
+    try {
+      const { getOrCreateTopicFactualDossier } = await import('./topicFactualDossierService')
+      dossier = await getOrCreateTopicFactualDossier(
         {
           courseId,
           topicKey,
@@ -258,8 +261,28 @@ async function processPromptSave(
         },
         { forceFresh },
       )
-    : null
-  await updateProgress(20, dossier?.text ? `Gerando ${label} com dossiê + Search…` : `Gerando ${label}…`)
+    } catch {
+      dossier = await getGoogleAiTopicDossierOptional(
+        {
+          courseId,
+          topicKey,
+          topicoNome: extra.topico || serverPayload?.savePlan?.topico,
+          disciplina,
+          ...examCtx,
+        },
+        { forceFresh },
+      )
+    }
+  }
+  const richDossier = String(dossier?.text || '').trim().length >= 400
+  await updateProgress(
+    20,
+    richDossier
+      ? `Gerando ${label} com dossiê (sem Search por lote)…`
+      : dossier?.text
+        ? `Gerando ${label} com dossiê + Search…`
+        : `Gerando ${label}…`,
+  )
 
   // Questões: sempre em lotes (evita truncar em ~12 quando o alvo é 50)
   if (topicKey && extra.contentType === 'questoes') {
@@ -289,6 +312,8 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
           isLegalContent: aiOptions.isLegalContent,
           contentType: 'questoes',
           verifyContent: false,
+          // Dossiê rico → sem grounding em cada lote
+          useGoogleSearch: !richDossier,
           generationConfig: aiOptions.generationConfig || {
             maxOutputTokens: 24000,
             temperature: 0.2,
@@ -816,18 +841,34 @@ async function processSingleMentoradoTopic({
     disciplina,
     topicoNome: topic.topicoNome,
   })
-  await updateProgress(pctBase, `${label}: preparando geração automática…`)
-  const dossierResult = await getGoogleAiTopicDossierOptional(
-    {
-      courseId,
-      topicKey,
-      topicoNome: topic.topicoNome,
-      disciplina,
-      ...examCtx,
-    },
-    { forceFresh },
-  )
-  const googleAiDossier = dossierResult.text || ''
+  await updateProgress(pctBase, `${label}: preparando dossiê factual…`)
+  let dossierResult
+  try {
+    const { getOrCreateTopicFactualDossier } = await import('./topicFactualDossierService')
+    dossierResult = await getOrCreateTopicFactualDossier(
+      {
+        courseId,
+        topicKey,
+        topicoNome: topic.topicoNome,
+        disciplina,
+        ...examCtx,
+      },
+      { forceFresh },
+    )
+  } catch {
+    dossierResult = await getGoogleAiTopicDossierOptional(
+      {
+        courseId,
+        topicKey,
+        topicoNome: topic.topicoNome,
+        disciplina,
+        ...examCtx,
+      },
+      { forceFresh },
+    )
+  }
+  const googleAiDossier = dossierResult?.text || ''
+  const richTopicDossier = googleAiDossier.trim().length >= 400
 
   let materialParsed = null
   let questoesParsed = null
@@ -840,7 +881,9 @@ async function processSingleMentoradoTopic({
   })
   await updateProgress(
     pctBase,
-    `Tópico ${index + 1}/${total}: ${label} — material (Search automático)`,
+    richTopicDossier
+      ? `Tópico ${index + 1}/${total}: ${label} — material (dossiê)`
+      : `Tópico ${index + 1}/${total}: ${label} — material (Search)`,
   )
 
   const matPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
@@ -855,6 +898,7 @@ async function processSingleMentoradoTopic({
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
           verifyContent: true,
+          useGoogleSearch: !richTopicDossier,
           courseContext,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
         }),
@@ -888,6 +932,7 @@ async function processSingleMentoradoTopic({
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
           verifyContent: false,
+          useGoogleSearch: !richTopicDossier,
           courseContext,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
         }),
@@ -923,7 +968,12 @@ async function processSingleMentoradoTopic({
     step: 'questoes',
   })
 
-  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões (Search)`)
+  await updateProgress(
+    pctBase + 3,
+    richTopicDossier
+      ? `Tópico ${index + 1}/${total}: ${label} — questões (dossiê)`
+      : `Tópico ${index + 1}/${total}: ${label} — questões (Search)`,
+  )
   const qPrep = await prepareQuestoesRun({
     courseId,
     topicKey,
@@ -961,6 +1011,7 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
           ...buildTrustedOptions(disciplina, {
             contentType: 'questoes',
             verifyContent: false,
+            useGoogleSearch: !richTopicDossier,
             courseContext,
             generationConfig: { maxOutputTokens: 24000, temperature: 0.15 },
           }),

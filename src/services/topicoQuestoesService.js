@@ -24,6 +24,11 @@ import {
   normalizeExamContext,
 } from '../utils/examFidelityContext'
 import { filterValidQuestoes } from '../utils/questoesQuality'
+import {
+  getOrCreateTopicFactualDossier,
+  hasRichDossier,
+} from './topicFactualDossierService'
+import { appendGoogleAiDossier } from './googleAiBrowserVerifier'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -81,6 +86,23 @@ export async function generateAndSaveQuestoesForTopico({
   const schemaSnippet = buildQuestaoJsonSchemaSnippet(exam.tipoProva)
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
 
+  // 1 dossiê por tópico (Firestore) — lotes reutilizam sem grounding por chamada
+  const dossier = await getOrCreateTopicFactualDossier({
+    courseId: resolvedId,
+    topicKey,
+    topicoNome,
+    disciplina,
+    banca: exam.banca,
+    cargo: exam.cargo,
+    concursoName: exam.concursoName,
+  })
+  const richDossier = hasRichDossier(dossier)
+  console.log(
+    richDossier
+      ? `[questoes] dossiê rico (${dossier.text.length} chars) — lotes sem Search`
+      : '[questoes] dossiê fraco/ausente — lotes com Search',
+  )
+
   const isQuotaErr = (err) => {
     const msg = String(err?.message || err || '').toLowerCase()
     const code = String(err?.code || '').toLowerCase()
@@ -94,7 +116,7 @@ export async function generateAndSaveQuestoesForTopico({
   }
 
   const generateBatch = async (batchNumber, totalBatches) => {
-    const prompt = `${fidelityBlock}
+    const basePrompt = `${fidelityBlock}
 Gere questões preditivas de "Véspera de Prova" para ESTE tópico específico.
 
 CURSO/CONCURSO: ${exam.concursoName || courseName || 'Concurso público'}
@@ -115,6 +137,7 @@ REGRAS:
 - Fidelidade 100% à banca ${exam.banca || 'indicada'} e ao cargo ${exam.cargo || 'do edital'}
 - Formato ${tipoLabel} — sem misturar com outro formato
 - Não invente leis/artigos
+- Use o DOSSIÊ FACTUAL como fonte de verdade quando presente
 - ${AI_TEXT_FORMAT_RULES}
 
 FORMATO JSON (apenas JSON válido):
@@ -127,6 +150,7 @@ FORMATO JSON (apenas JSON válido):
     }
   ]
 }`
+    const prompt = appendGoogleAiDossier(basePrompt, dossier?.text)
 
     const MAX_BATCH_ATTEMPTS = 3
     let lastErr = null
@@ -142,8 +166,8 @@ A tentativa anterior falhou ou veio vazia/inválida. Gere de novo EXATAMENTE 5 q
           {
             courseId,
             trustedGeneration: true,
-            // Grounding em TODOS os lotes — qualidade jurídica das questões
-            useGoogleSearch: true,
+            // Dossiê rico → sem Search por lote; senão Search (qualidade)
+            useGoogleSearch: !richDossier,
             useRAG: false,
             thinkingLevel: 'low',
             maxContinues: 2,

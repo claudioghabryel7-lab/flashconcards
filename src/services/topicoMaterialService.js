@@ -19,6 +19,11 @@ import {
   saveMaterialCheckpoint,
 } from './localGenerationCheckpoint'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
+import {
+  getOrCreateTopicFactualDossier,
+  hasRichDossier,
+} from './topicFactualDossierService'
+import { appendGoogleAiDossier } from './googleAiBrowserVerifier'
 
 /**
  * Retorna material existente se completo; senão gera, salva e devolve.
@@ -109,11 +114,30 @@ export async function ensureMaterialForTopico({
     topicoNome: topicoNome || normalizedTopicKey,
   })
 
-  await onProgress(25, 'Gerando material de apoio do tópico…')
-  let parsed = await generateAiJson(prompt, {
+  await onProgress(18, 'Montando dossiê factual do tópico…')
+  const dossier = await getOrCreateTopicFactualDossier({
+    courseId: resolvedId,
+    topicKey: normalizedTopicKey,
+    topicoNome: topicoNome || normalizedTopicKey,
+    disciplina,
+    banca: examCtx.banca,
+    cargo: examCtx.cargo,
+    concursoName: examCtx.concursoName,
+  })
+  const richDossier = hasRichDossier(dossier)
+  const promptWithDossier = appendGoogleAiDossier(prompt, dossier?.text)
+
+  await onProgress(
+    25,
+    richDossier
+      ? 'Gerando material com dossiê (sem Search extra)…'
+      : 'Gerando material de apoio do tópico…',
+  )
+  let parsed = await generateAiJson(promptWithDossier, {
     courseId: resolvedId,
     trustedGeneration: true,
-    useGoogleSearch: true,
+    // Dossiê rico já trouxe os fatos (1 Search); senão Search na geração
+    useGoogleSearch: !richDossier,
     // Auditoria pós em material jurídico (sem 2º grounding — geminiApi desliga Search no verify)
     verifyContent: isLegal,
     isLegalContent: isLegal,
@@ -144,7 +168,7 @@ export async function ensureMaterialForTopico({
     generateOptions: {
       courseId: resolvedId,
       trustedGeneration: true,
-      useGoogleSearch: true,
+      useGoogleSearch: !richDossier,
       verifyContent: false,
       isLegalContent: isLegal,
       thinkingLevel: 'low',
