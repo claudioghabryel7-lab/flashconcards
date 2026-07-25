@@ -1,12 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { getGeminiApiKey } from './serverSecrets'
-import {
-  GEMINI_FLASH_MODEL,
-  GEMINI_FLASH_FALLBACK_MODEL,
-  GEMINI_PRO_MODEL,
-} from '../utils/geminiModels.js'
+import { GEMINI_FLASH_MODEL, getDefaultGeminiModels } from '../utils/geminiModels.js'
 
-const MODELS = [GEMINI_FLASH_MODEL, GEMINI_FLASH_FALLBACK_MODEL, GEMINI_PRO_MODEL]
+const MODELS = getDefaultGeminiModels()
 
 function getApiKey() {
   if (typeof window !== 'undefined') {

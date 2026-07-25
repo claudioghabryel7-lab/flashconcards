@@ -225,7 +225,7 @@ async function getAvailableApiKey() {
  * @param {Object} options - Opções adicionais
  * @param {number} options.maxRetries - Número máximo de tentativas (padrão: 3)
  * @param {number} options.baseDelay - Delay base em ms (padrão: 2000)
- * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-3.6-flash, gemini-3.5-flash, gemini-3.1-pro-preview)
+ * @param {Array<string>} options.models - Lista de modelos (padrão: lite → 3.6-flash → 3.5-flash)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
  * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
  * @param {boolean} options.useRAG - Se deve usar RAG com Google Search API (padrão: true)

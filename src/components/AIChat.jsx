@@ -18,6 +18,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { createGeminiBrowserClient, fetchGeminiModelsViaProxy } from '../utils/geminiBrowserClient'
 import { callGroqProxy } from '../utils/secureLlmClient'
+import { GEMINI_COST_MODELS, GEMINI_FLASH_MODEL } from '../utils/geminiModels'
 
 const MATERIAS = [
   'Português',
@@ -186,9 +187,7 @@ const AIChat = () => {
         const models = data.models || []
         
         const preferred = [
-          'gemini-3.6-flash',
-          'gemini-3.5-flash',
-          'gemini-3.1-pro-preview',
+          ...GEMINI_COST_MODELS,
           'gemini-flash-latest',
           'gemini-pro-latest',
         ]

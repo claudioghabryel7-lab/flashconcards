@@ -3,6 +3,8 @@
 ## Google Gemini API (servidor)
 - `GEMINI_API_KEY`: API Key do Google Gemini — **somente servidor**
 - Não use `VITE_GEMINI_API_KEY` (legado removido do bundle do browser)
+- Modelo padrão: **`gemini-3.5-flash-lite`** (mais barato), com fallback para `gemini-3.6-flash` / `gemini-3.5-flash`
+- Opcional: `VITE_GEMINI_MODEL` para forçar outro modelo no topo da cadeia
 
 ## Google Search API (RAG — servidor)
 1. Crie uma Custom Search Engine: https://programmablesearchengine.google.com/

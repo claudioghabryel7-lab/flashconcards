@@ -8,6 +8,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ResultExport from '../components/ResultExport'
 import CourseAdScreen from '../components/CourseAdScreen'
 import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
+import { GEMINI_FLASH_MODEL } from '../utils/geminiModels'
 import {
   ClockIcon,
   CheckCircleIcon,
@@ -607,7 +608,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
       const genAI = createGeminiBrowserClient()
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({ model: GEMINI_FLASH_MODEL })
 
       const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
 
@@ -666,7 +667,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
 
     try {
       const genAI = createGeminiBrowserClient()
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({ model: GEMINI_FLASH_MODEL })
 
       // Validar tamanho mínimo
       const wordCount = redacaoTexto.trim().split(/\s+/).length

@@ -1321,7 +1321,7 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
 
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.5-flash-lite',
         generationConfig: {
           maxOutputTokens: 8000,
           temperature: 0.7,
@@ -1503,7 +1503,7 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
       // Chamar a função de geração diretamente (sem HTTP)
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.5-flash-lite',
         generationConfig: {
           maxOutputTokens: 8000,
           temperature: 0.7,
@@ -1718,7 +1718,7 @@ exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
       // Gerar notícia com IA baseada no conteúdo
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.5-flash-lite',
         generationConfig: {
           maxOutputTokens: 8000,
           temperature: 0.7,

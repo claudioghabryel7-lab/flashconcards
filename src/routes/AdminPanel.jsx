@@ -61,6 +61,7 @@ import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import LawDetector from '../utils/lawDetector'
 import LawDownloader from '../utils/lawDownloader'
 import { generateShareToken } from '../utils/shareToken'
+import { GEMINI_COST_MODELS, GEMINI_FLASH_MODEL } from '../utils/geminiModels'
 
 const MATERIAS = [
   'Português',
@@ -1330,7 +1331,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               const moduleResponse = await callGeminiWithRetry(modulePrompt, {
                 courseId,
-                models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                models: [...GEMINI_COST_MODELS],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               const moduleResponseText = extractGeneratedText(moduleResponse)
@@ -1918,7 +1919,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       // Chamar API
       const genAI = createGeminiBrowserClient()
       const model = genAI.getGenerativeModel({
-        model: 'gemini-3.6-flash',
+        model: GEMINI_FLASH_MODEL,
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 32000
@@ -3464,11 +3465,7 @@ REGRAS CRÍTICAS:
       const genAI = createGeminiBrowserClient()
       
       // Modelos disponíveis (proxy autenticado)
-      const modelNames = [
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-3.1-pro-preview'
-      ]
+      const modelNames = [...GEMINI_COST_MODELS]
       let model = null
       let lastError = null
       
@@ -3756,7 +3753,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                 courseId,
-                models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                models: [...GEMINI_COST_MODELS],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -3772,7 +3769,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 // Tentar novamente
                 flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                   courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                  models: [...GEMINI_COST_MODELS],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -3802,7 +3799,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 try {
                   retryResult = await callGeminiWithRetry(flashcardsPrompt, {
                     courseId,
-                    models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                    models: [...GEMINI_COST_MODELS],
                     generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                   })
                 } catch (retryQuotaErr) {
@@ -3812,7 +3809,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                     setFullCourseProgress(`⏳ Quota excedida no retry. Aguardando ${waitSeconds} segundos...`)
                     await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
                     retryResult = await callGeminiWithRetry(flashcardsPrompt, {
-                      models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                      models: [...GEMINI_COST_MODELS],
                       generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                     })
                   } else {
@@ -3929,11 +3926,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     try {
       const genAI = createGeminiBrowserClient()
       
-      const modelNames = [
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-3.1-pro-preview'
-      ]
+      const modelNames = [...GEMINI_COST_MODELS]
       let model = null
       let lastError = null
       
@@ -4071,7 +4064,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
       const analysisResponse = await callGeminiWithRetry(analysisPrompt, {
         courseId,
-        models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+        models: [...GEMINI_COST_MODELS],
         generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
       })
       let analysisText = extractGeneratedText(analysisResponse).trim()
@@ -4203,7 +4196,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                 courseId,
-                models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                models: [...GEMINI_COST_MODELS],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -4219,7 +4212,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 // Tentar novamente
                 flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                   courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                  models: [...GEMINI_COST_MODELS],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -4796,7 +4789,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       // 3. Chamar IA para gerar conteúdo técnico completo
       const genAI = createGeminiBrowserClient()
-      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+      const modelNames = [...GEMINI_COST_MODELS]
       let lastError = null
       let aiResponse = ''
 
@@ -5043,7 +5036,7 @@ CRÍTICO:
 
       // 3. Chamar IA para identificar todas as matérias do edital
       const genAI = createGeminiBrowserClient()
-      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+      const modelNames = [...GEMINI_COST_MODELS]
       let lastError = null
       let materiasList = []
 
@@ -5094,7 +5087,7 @@ CRÍTICO:
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(analysisPrompt, {
             courseId,
-            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+            models: [...GEMINI_COST_MODELS],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
           let analysisText = extractGeneratedText(result).trim()
@@ -5413,7 +5406,7 @@ CRÍTICO:
     const concursoName = unifiedData?.concursoName || ''
     
     const genAI = createGeminiBrowserClient()
-    const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+    const modelNames = [...GEMINI_COST_MODELS]
     let lastError = null
     let materiasList = []
 
@@ -5437,7 +5430,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
         // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
         const result = await callGeminiWithRetry(analysisPrompt, {
           courseId,
-          models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+          models: [...GEMINI_COST_MODELS],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
         let analysisText = extractGeneratedText(result).trim()
@@ -5508,7 +5501,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     const concursoName = unifiedData?.concursoName || ''
     
     const genAI = createGeminiBrowserClient()
-    const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+    const modelNames = [...GEMINI_COST_MODELS]
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
@@ -5531,7 +5524,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
         // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
         const result = await callGeminiWithRetry(analysisPrompt, {
           courseId,
-          models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+          models: [...GEMINI_COST_MODELS],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
         let analysisText = extractGeneratedText(result).trim()
@@ -5606,7 +5599,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
 
       // 3. Chamar IA para identificar todas as matérias do edital
       const genAI = createGeminiBrowserClient()
-      const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
+      const modelNames = [...GEMINI_COST_MODELS]
       let lastError = null
       let materiasList = []
 
@@ -5657,7 +5650,7 @@ CRÍTICO:
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(analysisPrompt, {
             courseId,
-            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+            models: [...GEMINI_COST_MODELS],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
           let analysisText = extractGeneratedText(result).trim()
@@ -6407,7 +6400,7 @@ CRÍTICO:
         console.log('🤖 Tentando usar Gemini...')
         const result = await callGeminiWithRetry(systemPrompt, {
           courseId: courseIdForGeneration,
-          models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+          models: [...GEMINI_COST_MODELS],
           generationConfig: { temperature: 0.35, maxOutputTokens: 8000 },
         })
         
@@ -7600,7 +7593,7 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
                             // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                             const verticalizadoResponse = await callGeminiWithRetry(verticalizadoPrompt, {
                               courseId,
-                              models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                              models: [...GEMINI_COST_MODELS],
                               generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                             })
                             let verticalizadoText = extractGeneratedText(verticalizadoResponse).trim()
@@ -7952,7 +7945,7 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                           const unifiedResponse = await callGeminiWithRetry(unifiedPrompt, {
                             courseId,
-                            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                            models: [...GEMINI_COST_MODELS],
                             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                           })
                           let unifiedText = extractGeneratedText(unifiedResponse).trim()
@@ -9132,7 +9125,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                 const response = await callGeminiWithRetry(prompt, {
                   courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+                  models: [...GEMINI_COST_MODELS],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 const text = extractGeneratedText(response)
