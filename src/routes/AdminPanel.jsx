@@ -6936,6 +6936,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
   const tabs = [
     { id: 'config', label: '⚙️ Configurações', icon: '⚙️' },
+    { id: 'ai-costs', label: '💰 Custos API', icon: '💰' },
     { id: 'flashcards', label: '📚 Flashcards', icon: '📚' },
     { id: 'users', label: '👥 Usuários', icon: '👥' },
     { id: 'edital', label: '📋 Edital Verticalizado', icon: '📋' },
@@ -6952,7 +6953,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'guia-mentorado', label: '📅 Guia Mentorado', icon: '📅' },
     { id: 'professor-fiscalizador', label: '🎓 Professor IA', icon: '🎓' },
     { id: 'generation-jobs', label: '⚡ Jobs locais', icon: '⚡' },
-    { id: 'ai-costs', label: '💰 Custos IA', icon: '💰' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' }
   ]
   
@@ -7158,6 +7158,15 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                             Verificar Status da I.A.
                           </>
                         )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('ai-costs')}
+                        className="px-4 py-3 bg-gradient-to-r from-teal-500 to-emerald-700 text-white rounded-xl font-bold hover:from-teal-600 hover:to-emerald-800 transition shadow-lg flex items-center gap-2"
+                        title="Tokens e custo estimado das chamadas Gemini"
+                      >
+                        <span aria-hidden>💰</span>
+                        Custos da API
                       </button>
                     </div>
                   </div>
