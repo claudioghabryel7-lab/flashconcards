@@ -3802,25 +3802,11 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
             } catch (quotaErr) {
-              // Se for erro de quota, aguardar e tentar novamente
+              // Quota: NÃO aguardar/retentar — queima crédito de novo
               if (isQuotaError(quotaErr)) {
-                const waitTime = extractWaitTime(quotaErr)
-                const waitSeconds = waitTime || 60
-                
-                setFullCourseProgress(`⏳ Quota excedida. Aguardando ${waitSeconds} segundos antes de continuar...`)
-                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                
-                // Tentar novamente
-                flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                  courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
-                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-                })
-                flashcardsText = extractGeneratedText(flashcardsResult).trim()
-                setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
-              } else {
-                throw quotaErr
+                setFullCourseProgress(`⏳ Quota da API esgotada. Interrompendo para não queimar crédito. Tente mais tarde.`)
               }
+              throw quotaErr
             }
             
             // Limpar markdown se houver
@@ -3848,17 +3834,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                   })
                 } catch (retryQuotaErr) {
                   if (isQuotaError(retryQuotaErr)) {
-                    const waitTime = extractWaitTime(retryQuotaErr)
-                    const waitSeconds = waitTime || 60
-                    setFullCourseProgress(`⏳ Quota excedida no retry. Aguardando ${waitSeconds} segundos...`)
-                    await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                    retryResult = await callGeminiWithRetry(flashcardsPrompt, {
-                      models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
-                      generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-                    })
-                  } else {
-                    throw retryQuotaErr
+                    setFullCourseProgress(`⏳ Quota da API esgotada no retry — interrompendo para não queimar crédito.`)
                   }
+                  throw retryQuotaErr
                 }
                 let retryText = extractGeneratedText(retryResult).trim()
                 if (retryText.startsWith('```json')) {
@@ -4268,25 +4246,11 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
             } catch (quotaErr) {
-              // Se for erro de quota, aguardar e tentar novamente
+              // Quota: NÃO aguardar/retentar — queima crédito de novo
               if (isQuotaError(quotaErr)) {
-                const waitTime = extractWaitTime(quotaErr)
-                const waitSeconds = waitTime || 60
-                
-                setFullCourseProgress(`⏳ Quota excedida ao gerar flashcards. Aguardando ${waitSeconds} segundos...`)
-                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                
-                // Tentar novamente
-                flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                  courseId,
-                  models: ['gemini-3.6-flash', 'gemini-3.5-flash'],
-                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-                })
-                flashcardsText = extractGeneratedText(flashcardsResult).trim()
-                setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
-              } else {
-                throw quotaErr
+                setFullCourseProgress(`⏳ Quota da API esgotada ao gerar flashcards. Interrompendo para não queimar crédito.`)
               }
+              throw quotaErr
             }
               
               if (flashcardsText.startsWith('```json')) {

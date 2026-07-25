@@ -382,17 +382,35 @@ REGRAS:
         metadata: { nivel: nivelAtual, disciplina: sanitizedDisciplinaNome, tipoProva: tipoLabel },
         task: async ({ updateProgress }) => {
           await updateProgress(50, `Gerando questões (${tipoLabel}) em lotes…`)
+          // Dossiê a partir do conteúdo de incidência já salvo (evita Search em cada lote)
+          const incidenciaSeed = [
+            conteudoIncidencia?.disciplina,
+            conteudoIncidencia?.resumo,
+            conteudoIncidencia?.conteudo,
+            Array.isArray(conteudoIncidencia?.topicosQuentes)
+              ? conteudoIncidencia.topicosQuentes.map((t) => t?.titulo || t?.nome || t).join('\n')
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+            .slice(0, 12000)
+          const { appendGoogleAiDossier } = await import('../services/googleAiBrowserVerifier')
+          const richIncidencia = incidenciaSeed.trim().length >= 400
+          const buildBatchWithSeed = (args) =>
+            appendGoogleAiDossier(buildBatchPrompt(args), incidenciaSeed)
+
           const batchResult = await generateQuestoesInBatches({
-            buildBatchPrompt,
+            buildBatchPrompt: buildBatchWithSeed,
             total: 50,
             batchSize: 10,
             examCtx: exam,
             aiOptions: {
               courseId,
               isLegalContent: true,
-              useRAG: true,
-              useGoogleSearch: true,
+              useRAG: false,
+              useGoogleSearch: !richIncidencia,
               verifyContent: false,
+              thinkingLevel: 'low',
             },
             onBatchProgress: async ({ batchNumber, batches }) => {
               await updateProgress(

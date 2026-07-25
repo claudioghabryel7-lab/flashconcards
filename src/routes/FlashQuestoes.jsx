@@ -299,7 +299,7 @@ const FlashQuestoes = () => {
             },
           ],
           temperature: 0.7,
-          max_tokens: 8192, // Reduzido para velocidade
+          max_tokens: 2500, // Reduzido para velocidade
         }),
       })
 

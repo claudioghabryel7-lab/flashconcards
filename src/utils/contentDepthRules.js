@@ -534,13 +534,21 @@ export async function ensureMaterialContentComplete(
     return material
   }
 
+  // Search nos reparos: só se o caller pediu (dossiê fraco). Dossiê rico → sem Search extra.
+  const repairOpts = {
+    ...generateOptions,
+    useGoogleSearch: generateOptions?.useGoogleSearch === true,
+    useRAG: false,
+    verifyContent: false,
+  }
+
   // 2) Expandir padrão da banca se superficial
   if (!isPadraoBancaAdequate(material)) {
     console.warn('[material] enriquecendo padraoBanca…')
     try {
       const patch = await callMaterialPatch(
         generateAiJson,
-        { ...generateOptions, useGoogleSearch: true },
+        repairOpts,
         buildPadraoBancaPrompt(material, context),
       )
       const nextPadrao = String(patch?.padraoBanca || patch?.raioXProbabilidade?.padraoBanca || '').trim()
@@ -572,15 +580,15 @@ export async function ensureMaterialContentComplete(
       try {
         let next = await deepenOneResumo(item, {
           generateAiJson,
-          generateOptions: { ...generateOptions, useGoogleSearch: true },
+          generateOptions: repairOpts,
           context,
           material,
         })
-        // Segunda chance se ainda raso
+        // Segunda chance se ainda raso (sem Search forçado)
         if (!isResumoDeepEnough(next)) {
           next = await deepenOneResumo(next, {
             generateAiJson,
-            generateOptions,
+            generateOptions: repairOpts,
             context,
             material,
           })
@@ -605,7 +613,7 @@ export async function ensureMaterialContentComplete(
       try {
         const patch = await callMaterialPatch(
           generateAiJson,
-          { ...generateOptions, useGoogleSearch: true },
+          repairOpts,
           buildEnrichResumosPrompt(batch, context, material),
         )
         const expanded = extractRevisaoTurboItems(patch)

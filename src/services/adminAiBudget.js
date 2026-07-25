@@ -22,12 +22,19 @@ const EXPENSIVE_TYPES = new Set([
   'material_topico',
   'full_course',
   'vespera',
+  'admin_materia_revisada',
+  'admin_edital_verticalizado',
+  'guia_mentorado_automation',
+  'guia_mentorado_cronograma',
+  'guia_mentorado_incidencia',
+  'guia_mentorado_backfill',
 ])
 
 function readStore() {
   if (typeof window === 'undefined') return { starts: [] }
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
+    // localStorage: compartilha entre abas do mesmo browser (sessionStorage não)
+    const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return { starts: [] }
     const parsed = JSON.parse(raw)
     return { starts: Array.isArray(parsed.starts) ? parsed.starts : [] }
@@ -39,7 +46,7 @@ function readStore() {
 function writeStore(store) {
   if (typeof window === 'undefined') return
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
   } catch {
     // ignore
   }
