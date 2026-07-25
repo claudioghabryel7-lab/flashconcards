@@ -4,11 +4,11 @@ export function buildAiOptions(courseId, overrides = {}) {
   return {
     courseId: courseId || null,
     isLegalContent: true,
-    // Só Grounding (não RAG+Grounding — custo duplo). Thinking low p/ qualidade.
+    // Só Grounding (não RAG+Grounding). Thinking low. Verify pós sem 2º Search.
     useRAG: false,
     useGoogleSearch: true,
     thinkingLevel: 'low',
-    verifyContent: false, // geração já grounded; verify extra só sob demanda
+    verifyContent: true,
     ...overrides,
   }
 }

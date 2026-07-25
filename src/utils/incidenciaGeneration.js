@@ -123,7 +123,7 @@ export async function generateIncidenciaCompleta({
     useGoogleSearch: false,
     isLegalContent: true,
     thinkingLevel: 'low',
-    maxContinues: 3,
+    maxContinues: 4,
     generationConfig: {
       maxOutputTokens: INCIDENCIA_MAX_OUTPUT_TOKENS,
       temperature: 0.3,

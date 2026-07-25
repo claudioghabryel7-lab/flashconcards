@@ -70,19 +70,19 @@ import {
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  // Grounding só na geração — verify extra dobrava custo sem ganho claro.
+  // Grounding na geração. Verify pós é ligado por buildTrustedOptions (material/flashcards jurídicos).
   useGoogleSearch: true,
-  verifyContent: false,
+  verifyContent: false, // default; material/flashcards jurídicos sobrescrevem para true
   forceAudit: false,
   // low: qualidade jurídica sem thinking medium/high (caro como output)
   thinkingLevel: 'low',
 }
 
-/** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
-const TOPIC_AUTO_RETRIES = 2
-const TOPIC_RETRY_DELAY_MS = 4000
+/** Tentativas automáticas por tópico (JSON vazio, rede, qualidade) — sem clicar de novo. */
+const TOPIC_AUTO_RETRIES = 3
+const TOPIC_RETRY_DELAY_MS = 3000
 /** Varredura final nos que falharam com erro temporário. */
-const DAY_SWEEP_RETRIES = 1
+const DAY_SWEEP_RETRIES = 2
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -557,6 +557,7 @@ Retorne APENAS JSON:
     const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
     let batchCards = []
 
+    // Até 3 tentativas por lote se qualidade falhar (1ª falha NÃO abandona o tópico)
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const parsed = await generateAiJson(
         attempt === 1

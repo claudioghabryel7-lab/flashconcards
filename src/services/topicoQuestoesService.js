@@ -81,6 +81,18 @@ export async function generateAndSaveQuestoesForTopico({
   const schemaSnippet = buildQuestaoJsonSchemaSnippet(exam.tipoProva)
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
 
+  const isQuotaErr = (err) => {
+    const msg = String(err?.message || err || '').toLowerCase()
+    const code = String(err?.code || '').toLowerCase()
+    return (
+      code.includes('quota') ||
+      msg.includes('quota') ||
+      msg.includes('429') ||
+      msg.includes('resource_exhausted') ||
+      msg.includes('rate limit')
+    )
+  }
+
   const generateBatch = async (batchNumber, totalBatches) => {
     const prompt = `${fidelityBlock}
 Gere questões preditivas de "Véspera de Prova" para ESTE tópico específico.
@@ -116,29 +128,67 @@ FORMATO JSON (apenas JSON válido):
   ]
 }`
 
-    const parsed = await generateAiJson(prompt, {
-      courseId,
-      trustedGeneration: true,
-      // Grounding só nos 2 primeiros lotes — demais reutilizam o mesmo tópico (economia)
-      useGoogleSearch: batchNumber <= 2,
-      useRAG: false,
-      thinkingLevel: 'low',
-      maxContinues: 2,
-      generationConfig: { maxOutputTokens: 16000, temperature: 0.2 },
-    })
+    const MAX_BATCH_ATTEMPTS = 3
+    let lastErr = null
+    for (let attempt = 1; attempt <= MAX_BATCH_ATTEMPTS; attempt += 1) {
+      try {
+        const parsed = await generateAiJson(
+          attempt === 1
+            ? prompt
+            : `${prompt}
 
-    const { ok } = filterValidQuestoes(parsed.questoes || [], {
-      tipoProva: exam.tipoProva,
-      banca: exam.banca,
-      minKeep: 1,
-    })
+═══ RETENTATIVA ${attempt}/${MAX_BATCH_ATTEMPTS} ═══
+A tentativa anterior falhou ou veio vazia/inválida. Gere de novo EXATAMENTE 5 questões válidas neste lote.`,
+          {
+            courseId,
+            trustedGeneration: true,
+            // Grounding em TODOS os lotes — qualidade jurídica das questões
+            useGoogleSearch: true,
+            useRAG: false,
+            thinkingLevel: 'low',
+            maxContinues: 2,
+            generationConfig: {
+              maxOutputTokens: 16000,
+              temperature: attempt === 1 ? 0.2 : 0.15,
+            },
+          },
+        )
 
-    console.log(`✅ Lote ${batchNumber}: ${ok.length} questões válidas (${tipoLabel})`)
-    return ok
+        const { ok } = filterValidQuestoes(parsed.questoes || [], {
+          tipoProva: exam.tipoProva,
+          banca: exam.banca,
+          minKeep: 1,
+        })
+
+        if (ok.length >= 1) {
+          console.log(`✅ Lote ${batchNumber}: ${ok.length} questões válidas (${tipoLabel})`)
+          return ok
+        }
+
+        lastErr = new Error(`Lote ${batchNumber} sem questões válidas`)
+        lastErr.code = 'questoes_invalid'
+        if (attempt < MAX_BATCH_ATTEMPTS) {
+          console.warn(`⚠️ Lote ${batchNumber} vazio — retentando (${attempt + 1}/${MAX_BATCH_ATTEMPTS})…`)
+          await new Promise((r) => setTimeout(r, 1500 * attempt))
+          continue
+        }
+      } catch (err) {
+        lastErr = err
+        if (isQuotaErr(err)) throw err // cota: não queima de novo neste lote
+        if (attempt < MAX_BATCH_ATTEMPTS) {
+          console.warn(
+            `⚠️ Lote ${batchNumber} erro (“${err?.message || err}”) — retentando (${attempt + 1}/${MAX_BATCH_ATTEMPTS})…`,
+          )
+          await new Promise((r) => setTimeout(r, 2000 * attempt))
+          continue
+        }
+      }
+    }
+    throw lastErr || new Error(`Lote ${batchNumber} falhou após ${MAX_BATCH_ATTEMPTS} tentativas`)
   }
 
   const totalBatches = 10
-  // Concorrência 2 (antes: 10 em paralelo → pico de cota + retries caros)
+  // Concorrência 2 (evita pico de cota; grounding e qualidade intactos)
   const CONCURRENCY = 2
   console.log(`🚀 Gerando ${totalBatches} lotes (${tipoLabel}), concorrência ${CONCURRENCY}...`)
   const allBatches = []

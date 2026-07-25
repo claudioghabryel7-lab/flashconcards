@@ -667,10 +667,10 @@ REGRAS FINAIS:
         useRAG: false,
         trustedGeneration: true,
         useGoogleSearch: true,
-        // Grounding na geração; verify extra = 2ª chamada cara
-        verifyContent: false,
+        // Verify jurídico sem 2º grounding (geminiApi: verifyWithSearch=false se já grounded)
+        verifyContent: true,
         thinkingLevel: 'low',
-        maxContinues: 3,
+        maxContinues: 4,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       }
       let parsed = await generateAiJson(prompt, genOpts)

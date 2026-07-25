@@ -114,12 +114,12 @@ export async function ensureMaterialForTopico({
     courseId: resolvedId,
     trustedGeneration: true,
     useGoogleSearch: true,
-    // Grounding na geração já valida fatos — 2ª chamada verify com Search era vazamento
-    verifyContent: false,
+    // Auditoria pós em material jurídico (sem 2º grounding — geminiApi desliga Search no verify)
+    verifyContent: isLegal,
     isLegalContent: isLegal,
     useRAG: false,
     thinkingLevel: 'low',
-    maxContinues: 3,
+    maxContinues: 4,
     courseContext,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
   })

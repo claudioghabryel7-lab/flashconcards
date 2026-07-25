@@ -48,12 +48,14 @@ export function buildVerificationPrompt(content, courseData = {}) {
   const hoje = new Date().toLocaleDateString('pt-BR')
 
   return `Você é auditor jurídico de material para concursos (${concurso}, banca ${banca}).
-Data: ${hoje}. Use Google Search para confirmar vigência de leis, artigos vetados e status de normas (ex.: Juiz das Garantias).
+Data: ${hoje}.
+O texto abaixo já foi gerado com grounding/busca; audite inconsistências internas, artigos vetados/revogados conhecidos e afirmações absurdas.
+Se houver ferramenta de busca disponível, use-a; senão, baseie-se no conhecimento jurídico consolidado e marque INCERTO quando não tiver certeza.
 
 Analise o conteúdo abaixo. Para cada afirmação jurídica relevante, classifique:
-- CONFIRMADO (com fonte oficial)
+- CONFIRMADO (com fonte oficial ou conhecimento consolidado)
 - INCERTO (sem confirmação)
-- FALSO (contradiz fonte oficial)
+- FALSO (contradiz fonte oficial / norma revogada)
 
 Responda APENAS com JSON válido:
 {
