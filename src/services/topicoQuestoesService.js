@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import {
   collection,
   doc,
@@ -9,7 +8,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
-import { generateAiJson, hasGeminiApiKeys } from '../utils/geminiApi'
+import { generateAiJson } from '../utils/geminiApi'
 import {
   AI_TEXT_FORMAT_RULES,
   sanitizeQuestaoAlternativas,
@@ -57,10 +56,6 @@ export async function generateAndSaveQuestoesForTopico({
   courseName,
   editalText = '',
 }) {
-  if (!hasGeminiApiKeys()) {
-    throw new Error('Nenhuma API key Gemini configurada (VITE_GEMINI_API_KEY)')
-  }
-
   const resolvedId = courseId || 'alego-default'
   const courseRef = doc(db, 'courses', resolvedId)
   const courseDoc = await getDoc(courseRef)

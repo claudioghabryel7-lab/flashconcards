@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { doc, getDoc, setDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
@@ -188,13 +187,7 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
           nivel: t.nivel
         })))
 
-      // Chamar IA para gerar recomendações
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      console.log('🔑 API Key disponível:', !!apiKey)
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
+      // Chamar IA para gerar recomendações (proxy autenticado)
       console.log('📝 Enviando prompt para IA...')
 
       const prompt = `Você é um mentor especializado em concursos públicos e planejamento de estudos.

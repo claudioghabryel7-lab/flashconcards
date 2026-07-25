@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
@@ -252,12 +251,6 @@ const PraticaIncidenciaView = () => {
     if (!courseId || !conteudoIncidencia) return
     if (profile?.role !== 'admin') {
       setStatus('❌ Apenas administradores podem gerar questões.')
-      return
-    }
-
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setStatus('❌ API Key não configurada.')
       return
     }
 

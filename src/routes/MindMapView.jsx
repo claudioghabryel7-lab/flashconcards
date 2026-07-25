@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
@@ -182,9 +181,8 @@ const MindMapView = () => {
       // Definir título central
       setCentralNodeTitle((materia || 'TÓPICO PRINCIPAL').toUpperCase())
       
-      // Organizar com Gemini (se disponível)
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (apiKey && validCards.length > 3) {
+      // Organizar com Gemini via proxy autenticado
+      if (validCards.length > 3) {
         try {
           setGenerationProgress('Organizando conteúdo com IA...')
           

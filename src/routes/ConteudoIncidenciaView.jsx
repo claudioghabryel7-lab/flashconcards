@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
@@ -127,12 +126,6 @@ const ConteudoIncidenciaView = () => {
     const disciplina = editalVerticalizado.disciplinas[disciplinaIndex]
     if (!disciplina?.topicos || disciplina.topicos.length === 0) {
       setStatus('❌ Esta disciplina não possui tópicos.')
-      return
-    }
-
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setStatus('❌ API Key não configurada.')
       return
     }
 

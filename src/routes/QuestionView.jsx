@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { doc, setDoc, onSnapshot } from 'firebase/firestore'
@@ -20,6 +19,7 @@ import {
   rateExplanationCache
 } from '../utils/cache'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGroqProxy } from '../utils/secureLlmClient'
 import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
 import { buildQuestaoContentId } from '../utils/contentCommentIds'
 import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
@@ -253,9 +253,6 @@ const QuestionView = () => {
         return
       }
       
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-      
       const prompt = `Você é um professor especialista em concursos públicos.
 
 Questão:
@@ -276,61 +273,36 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
 
       let explanation = ''
       
-      // Função auxiliar para chamar Groq API
+      // Função auxiliar para chamar Groq via proxy autenticado
       const callGroqAPI = async (promptText) => {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${groqApiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              {
-                role: 'system',
-                content: 'Você é um professor especialista em concursos públicos.',
-              },
-              {
-                role: 'user',
-                content: promptText,
-              },
-            ],
-            temperature: 0.7,
-            max_tokens: 2000,
-          }),
+        const data = await callGroqProxy({
+          model: 'llama-3.3-70b-versatile',
+          system: 'Você é um professor especialista em concursos públicos.',
+          messages: [{ role: 'user', content: promptText }],
+          temperature: 0.7,
+          max_tokens: 2000,
         })
-        
-        if (!response.ok) {
-          throw new Error(`Groq API error: ${response.status}`)
-        }
-        
-        const data = await response.json()
         return data.choices[0]?.message?.content || ''
       }
       
-      if (apiKey) {
-        try {
-          const response = await callGeminiWithRetry(prompt, {
-            courseId: (profile?.selectedCourseId || 'alego-default'),
-            generationConfig: {
-              maxOutputTokens: 2000,
-              temperature: 0.35,
-            },
-          })
-          explanation = extractGeneratedText(response)
-        } catch (geminiErr) {
-          const errorMessage = geminiErr.message || String(geminiErr) || ''
-          const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota')
-          
-          if (isQuotaError && groqApiKey) {
-            explanation = await callGroqAPI(prompt)
-          } else {
-            throw geminiErr
-          }
+      try {
+        const response = await callGeminiWithRetry(prompt, {
+          courseId: (profile?.selectedCourseId || 'alego-default'),
+          generationConfig: {
+            maxOutputTokens: 2000,
+            temperature: 0.35,
+          },
+        })
+        explanation = extractGeneratedText(response)
+      } catch (geminiErr) {
+        const errorMessage = geminiErr.message || String(geminiErr) || ''
+        const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota')
+        
+        if (isQuotaError) {
+          explanation = await callGroqAPI(prompt)
+        } else {
+          throw geminiErr
         }
-      } else if (groqApiKey) {
-        explanation = await callGroqAPI(prompt)
       }
       
       await saveExplanationCache(questionId, explanation)

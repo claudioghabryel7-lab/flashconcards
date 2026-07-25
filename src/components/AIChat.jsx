@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import {
   addDoc,
@@ -13,11 +12,12 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { PaperAirplaneIcon } from '@heroicons/react/24/solid'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { createGeminiBrowserClient, fetchGeminiModelsViaProxy } from '../utils/geminiBrowserClient'
+import { callGroqProxy } from '../utils/secureLlmClient'
 
 const MATERIAS = [
   'Português',
@@ -176,22 +176,13 @@ const AIChat = () => {
     return () => unsub()
   }, [user, profile])
 
-  // Descobrir qual modelo está disponível
+  // Descobrir qual modelo está disponível via proxy
   useEffect(() => {
     const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey || availableModel) return
+      if (availableModel) return
 
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          throw new Error('Não foi possível listar modelos')
-        }
-
-        const data = await response.json()
+        const data = await fetchGeminiModelsViaProxy()
         const models = data.models || []
         
         const preferred = [
@@ -218,11 +209,11 @@ const AIChat = () => {
           })
 
         if (generateModels.length === 0) {
-          setModelError('Nenhum modelo de geração disponível. Verifique sua API key.')
+          setModelError('Nenhum modelo de geração disponível. Faça login e tente novamente.')
           return
         }
 
-        const genAI = new GoogleGenerativeAI(apiKey)
+        const genAI = createGeminiBrowserClient()
         const modelName = generateModels[0].name.replace('models/', '')
         
         try {
@@ -245,50 +236,30 @@ const AIChat = () => {
               continue
             }
           }
-          setModelError('Nenhum modelo funcionou. Verifique sua API key e permissões.')
+          setModelError('Nenhum modelo funcionou. Faça login e tente novamente.')
         }
       } catch (err) {
         console.error('Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API. Verifique sua API key.')
+        if (err?.code === 'auth_required') {
+          setModelError('Faça login para usar a IA.')
+        } else {
+          setModelError('Erro ao conectar com a API. Faça login e tente novamente.')
+        }
       }
     }
 
     findAvailableModel()
   }, [availableModel])
 
-  // Chamar Groq API como fallback
+  // Chamar Groq API como fallback via proxy autenticado
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile', // Modelo rápido e eficiente
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 300,
-        }),
+      const data = await callGroqProxy({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 300,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
       return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.'
     } catch (err) {
       console.error('Erro ao chamar Groq API:', err)
@@ -297,18 +268,12 @@ const AIChat = () => {
   }
 
   const getMentorResponse = async (userMessage) => {
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    
-    if (!apiKey) {
-      return 'API key não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env'
-    }
-
     if (!availableModel) {
-      return modelError || 'Aguardando configuração... Tente novamente em alguns segundos.'
+      return modelError || 'Faça login para usar a IA. Tente novamente em alguns segundos.'
     }
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       const model = genAI.getGenerativeModel({ model: availableModel })
 
       // Carregar prompt/configuração do edital e texto do PDF (por curso)
@@ -535,24 +500,15 @@ Pergunta do aluno: ${userMessage}
           console.warn('⚠️ Erro de quota detectado. Usando Groq como fallback...')
           setQuotaDailyLimit(true)
           
-          // Tentar usar Groq se disponível
-          const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-          if (groqApiKey) {
-            try {
-              setUsingGroq(true)
-              const groqResponse = await callGroqAPI(fullPrompt)
-              // Se Groq funcionou, retornar a resposta
-              console.log('✅ Groq respondeu com sucesso!')
-              return groqResponse
-            } catch (groqErr) {
-              console.error('❌ Erro ao usar Groq como fallback:', groqErr)
-              setUsingGroq(false)
-              // Se Groq também falhar, lançar erro
-              throw new Error('QUOTA_DAILY_LIMIT')
-            }
-          } else {
-            // Se não tem Groq configurado, lançar erro
-            console.error('❌ Groq API key não configurada')
+          // Tentar usar Groq via proxy
+          try {
+            setUsingGroq(true)
+            const groqResponse = await callGroqAPI(fullPrompt)
+            console.log('✅ Groq respondeu com sucesso!')
+            return groqResponse
+          } catch (groqErr) {
+            console.error('❌ Erro ao usar Groq como fallback:', groqErr)
+            setUsingGroq(false)
             throw new Error('QUOTA_DAILY_LIMIT')
           }
         }
@@ -594,10 +550,9 @@ Você atingiu o limite de 200 requisições/dia do plano gratuito do Google Gemi
    - Planos pagos têm limites muito maiores (milhares de requisições/dia)
    - O custo é baixo: ~$0.0001 por requisição
 
-3. CONFIGURAR NOVA API KEY:
-   - Após fazer upgrade, gere uma nova API key no Google AI Studio
-   - Substitua a VITE_GEMINI_API_KEY no arquivo .env
-   - Reinicie o servidor
+3. CONFIGURAR NO SERVIDOR:
+   - Peça ao administrador para verificar GEMINI_API_KEY no servidor
+   - A chave não fica mais no client (proxy autenticado)
 
 O chat estará disponível novamente amanhã ou após configurar um plano pago.`
       }

@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
@@ -9,8 +8,8 @@ import {
 } from '../utils/editalVerticalizadoLoader'
 import { canAccessMateria, isTrialMode } from '../utils/trialLimits'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
+import { callGroqProxy } from '../utils/secureLlmClient'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
@@ -272,43 +271,16 @@ const FlashQuestoes = () => {
     })
   }, [organizedModules, subjectOrderConfig])
 
-  // Função para chamar Groq API (OTIMIZADA)
+  // Função para chamar Groq API via proxy autenticado
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('VITE_GROQ_API_KEY não configurada')
-    }
-
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant', // Modelo mais rápido
-          messages: [
-            {
-              role: 'system',
-              content: 'Especialista em concursos. Crie questões diretas e objetivas.',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 8192, // Reduzido para velocidade
-        }),
+      const data = await callGroqProxy({
+        model: 'llama-3.1-8b-instant',
+        system: 'Especialista em concursos. Crie questões diretas e objetivas.',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 8192,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
       return data.choices[0]?.message?.content || ''
     } catch (err) {
       console.error('Erro ao chamar Groq API:', err)

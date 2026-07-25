@@ -1,6 +1,6 @@
-// Arquivo temporário para debug
-// Verifique se a API key está disponível em produção
+// Arquivo temporário para debug — não loga previews de keys
 console.log('Environment check:', {
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY ? '✅ Present' : '❌ Missing',
-  apiKeyLength: import.meta.env.VITE_GEMINI_API_KEY?.length || 0
+  geminiClientKey: 'bloqueada no client (use proxy /api/gemini)',
+  groqClientKey: 'bloqueada no client (use proxy /api/groq)',
+  mode: import.meta.env.MODE,
 })

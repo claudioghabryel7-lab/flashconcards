@@ -1,8 +1,8 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { createGeminiBrowserClient } from '../utils/geminiBrowserClient'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ResultExport from '../components/ResultExport'
@@ -352,10 +352,6 @@ const SimuladoShare = () => {
 
       setLoadingStatus('Inicializando gerador de questões...')
       setLoadingProgress(15)
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
 
       const simuladoInfo = simuladoData.simuladoInfo
       const validMaterias = simuladoInfo.materias || []
@@ -599,12 +595,6 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
   // Gerar tema de redação
   const generateRedacaoTheme = async () => {
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        setRedacaoTema('A importância da eficiência no serviço público')
-        return
-      }
-
       // Buscar link de referência do curso
       const courseId = simuladoData?.courseId || 'alego-default'
       const courseRef = doc(db, 'courses', courseId)
@@ -616,7 +606,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const { getLinkContextForAI } = await import('../utils/linkContent.js')
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
       const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
@@ -675,13 +665,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     setAnalizingRedacao(true)
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        finishSimulado()
-        return
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
 
       // Validar tamanho mínimo

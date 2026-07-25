@@ -50,8 +50,9 @@ import { auth, db, storage } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { resetAppCache } from '../utils/resetAppCache'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { createGeminiBrowserClient, fetchGeminiModelsViaProxy } from '../utils/geminiBrowserClient'
+import { callGroqProxy } from '../utils/secureLlmClient'
 import { createSlug } from '../utils/slug'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -1915,27 +1916,20 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       setFlashcardGenProgress('Enviando para IA...')
 
       // Chamar API
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' + readEnv('VITE_GEMINI_API_KEY'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 32000
-          }
-        })
+      const genAI = createGeminiBrowserClient()
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-3.6-flash',
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 32000
+        }
       })
-
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.error?.message || 'Erro na API')
-      }
+      const result = await model.generateContent(prompt)
+      const data = result
 
       setFlashcardGenProgress('Processando resposta...')
 
-      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      const generatedText = result.response.text()
 
       if (!generatedText) {
         throw new Error('A IA não retornou nenhum texto')
@@ -2034,13 +2028,6 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-      
-      if (!apiKey && !groqApiKey) {
-        throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
-      }
-
       const courseIdToUse = (flashcardForm.courseId || selectedCourseForFlashcards || '').trim() || null
       const materia = flashcardForm.materia
       const modulo = flashcardForm.modulo
@@ -2131,27 +2118,18 @@ REGRAS CRÍTICAS:
 
       let responseText = ''
       
-      if (apiKey) {
-        try {
-          setFlashcardGenProgress('Chamando Gemini API...')
-          const response = await callGeminiWithRetry(prompt, {
-            courseId: courseIdForGeneration,
-            generationConfig: {
-              maxOutputTokens: 32000,
-              temperature: 0.35,
-            },
-          })
-          responseText = extractGeneratedText(response)
-        } catch (geminiError) {
-          console.warn('Erro com Gemini, tentando Groq...', geminiError)
-          if (groqApiKey) {
-            setFlashcardGenProgress('Chamando Groq API...')
-            responseText = await callGroqAPI(prompt)
-          } else {
-            throw geminiError
-          }
-        }
-      } else if (groqApiKey) {
+      try {
+        setFlashcardGenProgress('Chamando Gemini API...')
+        const response = await callGeminiWithRetry(prompt, {
+          courseId: courseIdForGeneration,
+          generationConfig: {
+            maxOutputTokens: 32000,
+            temperature: 0.35,
+          },
+        })
+        responseText = extractGeneratedText(response)
+      } catch (geminiError) {
+        console.warn('Erro com Gemini, tentando Groq...', geminiError)
         setFlashcardGenProgress('Chamando Groq API...')
         responseText = await callGroqAPI(prompt)
       }
@@ -3483,41 +3461,29 @@ REGRAS CRÍTICAS:
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       
-      // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
-      // gemini-3.6-flash: modelo principal atual (substitui 2.5-flash)
+      // Modelos disponíveis (proxy autenticado)
       const modelNames = [
-        'gemini-3.6-flash',           // Modelo principal atual
-        'gemini-3.5-flash',           // Fallback rápido
-        'gemini-3.1-pro-preview'      // Fallback para análises complexas
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.1-pro-preview'
       ]
       let model = null
       let lastError = null
       
-      // Para API paga, tentar usar o melhor modelo primeiro
-      // Simplificar: apenas criar o modelo e usar (sem teste prévio que pode falhar)
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
           console.log(`✅ Tentando usar modelo: ${modelName}`)
-          // Não testar antes - usar diretamente e deixar falhar na primeira chamada real se necessário
-          // Isso evita falsos negativos no teste
           break
         } catch (err) {
-          // Se nem conseguir criar o modelo, tentar próximo
           const errorMsg = err.message?.toLowerCase() || ''
           if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
             console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
             lastError = err
             continue
           } else {
-            // Se for outro erro, ainda tentar usar
             console.log(`⚠️ Aviso ao criar modelo ${modelName}, mas tentando usar mesmo assim...`)
             model = genAI.getGenerativeModel({ model: modelName })
             break
@@ -3526,26 +3492,18 @@ REGRAS CRÍTICAS:
       }
       
       if (!model) {
-        // Se nenhum modelo funcionou, tentar listar modelos disponíveis da API
         try {
-          console.log('🔍 Listando modelos disponíveis da API...')
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-          )
+          console.log('🔍 Listando modelos disponíveis via proxy...')
+          const data = await fetchGeminiModelsViaProxy()
+          const models = data.models || []
+          const generateModels = models.filter((m) => {
+            return (m.supportedGenerationMethods || []).includes('generateContent')
+          })
           
-          if (response.ok) {
-            const data = await response.json()
-            const models = data.models || []
-            const generateModels = models.filter((m) => {
-              return (m.supportedGenerationMethods || []).includes('generateContent')
-            })
-            
-            if (generateModels.length > 0) {
-              // Usar o primeiro modelo disponível
-              const firstModelName = generateModels[0].name.replace('models/', '')
-              model = genAI.getGenerativeModel({ model: firstModelName })
-              console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
-            }
+          if (generateModels.length > 0) {
+            const firstModelName = generateModels[0].name.replace('models/', '')
+            model = genAI.getGenerativeModel({ model: firstModelName })
+            console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
           }
         } catch (listErr) {
           console.warn('Erro ao listar modelos:', listErr)
@@ -3936,7 +3894,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         } else if (msg.includes('quota') || msg.includes('429')) {
           errorMessage = 'Erro: Limite de uso da API atingido. Tente novamente mais tarde.'
         } else if (msg.includes('api key') || msg.includes('api_key')) {
-          errorMessage = 'Erro: Chave da API não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env'
+          errorMessage = 'Erro: Faça login para usar a IA (proxy autenticado).'
         } else if (msg.includes('json') || msg.includes('parse')) {
           errorMessage = 'Erro: Resposta da IA em formato inválido. Tente novamente.'
         } else {
@@ -3969,40 +3927,28 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       
-      // Tentar modelos válidos (apenas modelos que funcionam)
-      // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
       const modelNames = [
-        'gemini-3.6-flash',           // Modelo principal atual
-        'gemini-3.5-flash',           // Fallback rápido
-        'gemini-3.1-pro-preview'      // Fallback para análises complexas
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.1-pro-preview'
       ]
       let model = null
       let lastError = null
       
-      // Para API paga, tentar usar o melhor modelo primeiro
-      // Simplificar: apenas criar o modelo e usar (sem teste prévio)
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
           console.log(`✅ Tentando usar modelo: ${modelName}`)
-          // Não testar antes - usar diretamente
           break
         } catch (err) {
-          // Se nem conseguir criar o modelo, tentar próximo
           const errorMsg = err.message?.toLowerCase() || ''
           if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
             console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
             lastError = err
             continue
           } else {
-            // Se for outro erro, ainda tentar usar
             console.log(`⚠️ Aviso ao criar modelo ${modelName}, mas tentando usar mesmo assim...`)
             model = genAI.getGenerativeModel({ model: modelName })
             break
@@ -4011,26 +3957,18 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
       
       if (!model) {
-        // Se nenhum modelo funcionou, tentar listar modelos disponíveis da API
         try {
-          console.log('🔍 Listando modelos disponíveis da API...')
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-          )
+          console.log('🔍 Listando modelos disponíveis via proxy...')
+          const data = await fetchGeminiModelsViaProxy()
+          const models = data.models || []
+          const generateModels = models.filter((m) => {
+            return (m.supportedGenerationMethods || []).includes('generateContent')
+          })
           
-          if (response.ok) {
-            const data = await response.json()
-            const models = data.models || []
-            const generateModels = models.filter((m) => {
-              return (m.supportedGenerationMethods || []).includes('generateContent')
-            })
-            
-            if (generateModels.length > 0) {
-              // Usar o primeiro modelo disponível
-              const firstModelName = generateModels[0].name.replace('models/', '')
-              model = genAI.getGenerativeModel({ model: firstModelName })
-              console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
-            }
+          if (generateModels.length > 0) {
+            const firstModelName = generateModels[0].name.replace('models/', '')
+            model = genAI.getGenerativeModel({ model: firstModelName })
+            console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
           }
         } catch (listErr) {
           console.warn('⚠️ Erro ao listar modelos:', listErr)
@@ -4857,6 +4795,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para gerar conteúdo técnico completo
+      const genAI = createGeminiBrowserClient()
       const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
       let lastError = null
       let aiResponse = ''
@@ -5103,6 +5042,7 @@ CRÍTICO:
       const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para identificar todas as matérias do edital
+      const genAI = createGeminiBrowserClient()
       const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
       let lastError = null
       let materiasList = []
@@ -5472,12 +5412,7 @@ CRÍTICO:
     const banca = unifiedData?.banca || ''
     const concursoName = unifiedData?.concursoName || ''
     
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      throw new Error('VITE_GEMINI_API_KEY não configurada')
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const genAI = createGeminiBrowserClient()
     const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
     let lastError = null
     let materiasList = []
@@ -5572,12 +5507,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     const banca = unifiedData?.banca || ''
     const concursoName = unifiedData?.concursoName || ''
     
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      throw new Error('VITE_GEMINI_API_KEY não configurada')
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const genAI = createGeminiBrowserClient()
     const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
     let materiasList = []
 
@@ -5675,6 +5605,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       const concursoName = unifiedData.concursoName || ''
 
       // 3. Chamar IA para identificar todas as matérias do edital
+      const genAI = createGeminiBrowserClient()
       const modelNames = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview']
       let lastError = null
       let materiasList = []
@@ -6275,39 +6206,15 @@ CRÍTICO:
     }
   }
 
-  // Chamar Groq API como fallback
+  // Chamar Groq API como fallback via proxy autenticado
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 8000,
-        }),
+      const data = await callGroqProxy({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 8000,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
       return data.choices[0]?.message?.content || ''
     } catch (err) {
       console.error('Erro ao chamar Groq API:', err)
@@ -6327,13 +6234,6 @@ CRÍTICO:
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-      
-      if (!apiKey && !groqApiKey) {
-        throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
-      }
-
       // Carregar informações do edital e PDF (do curso selecionado para flashcards)
       let editalInfo = ''
       let pdfTextContent = ''
@@ -6502,41 +6402,31 @@ CRÍTICO:
       let aiResponse = ''
       let useGroq = false
 
-      // Tentar Gemini primeiro
-      if (apiKey) {
-        try {
-          console.log('🤖 Tentando usar Gemini...')
-          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-          const result = await callGeminiWithRetry(systemPrompt, {
-            courseId: courseIdForGeneration,
-            models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
-            generationConfig: { temperature: 0.35, maxOutputTokens: 8000 },
-          })
-          
-          aiResponse = extractGeneratedText(result)
-          console.log('✅ Gemini respondeu com sucesso')
-        } catch (geminiErr) {
-          const errorMsg = geminiErr.message || String(geminiErr) || ''
-          const isQuotaError = errorMsg.includes('429') || errorMsg.includes('quota')
-          
-          console.warn('⚠️ Erro no Gemini:', errorMsg.substring(0, 200))
-          
-          if (isQuotaError && groqApiKey) {
-            console.warn('🔄 Gemini com quota, usando Groq como fallback...')
-            useGroq = true
-            aiResponse = await callGroqAPI(systemPrompt)
-            console.log('✅ Groq respondeu com sucesso')
-          } else {
-            throw geminiErr
-          }
+      // Tentar Gemini primeiro (proxy), Groq como fallback
+      try {
+        console.log('🤖 Tentando usar Gemini...')
+        const result = await callGeminiWithRetry(systemPrompt, {
+          courseId: courseIdForGeneration,
+          models: ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'],
+          generationConfig: { temperature: 0.35, maxOutputTokens: 8000 },
+        })
+        
+        aiResponse = extractGeneratedText(result)
+        console.log('✅ Gemini respondeu com sucesso')
+      } catch (geminiErr) {
+        const errorMsg = geminiErr.message || String(geminiErr) || ''
+        const isQuotaError = errorMsg.includes('429') || errorMsg.includes('quota')
+        
+        console.warn('⚠️ Erro no Gemini:', errorMsg.substring(0, 200))
+        
+        if (isQuotaError) {
+          console.warn('🔄 Gemini com quota, usando Groq como fallback...')
+          useGroq = true
+          aiResponse = await callGroqAPI(systemPrompt)
+          console.log('✅ Groq respondeu com sucesso')
+        } else {
+          throw geminiErr
         }
-      } else if (groqApiKey) {
-        console.log('🤖 Usando Groq diretamente...')
-        useGroq = true
-        aiResponse = await callGroqAPI(systemPrompt)
-        console.log('✅ Groq respondeu com sucesso')
-      } else {
-        throw new Error('Nenhuma API key configurada. Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY')
       }
 
       if (!aiResponse || aiResponse.trim().length === 0) {
@@ -7454,11 +7344,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                             console.log('Nenhuma parte antiga encontrada para remover (isso é normal):', partesErr.message)
                           }
                           
-                          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-                          const apiKey = readEnv('VITE_GEMINI_API_KEY')
-                          if (!apiKey) {
-                            throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
-                          }
+                          // Usar callGeminiWithRetry (proxy autenticado)
                           
                           // Dividir o edital em partes inteligentes baseado no tamanho
                           // Isso garante que a resposta da IA não seja truncada
@@ -9200,11 +9086,7 @@ ESTRUTURA SUGERIDA:
               try {
                           const courseId = selectedCourseForPrompts || 'alego-default'
                           
-                          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-                          const apiKey = readEnv('VITE_GEMINI_API_KEY')
-                          if (!apiKey) {
-                            throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
-                          }
+                          // Usar callGeminiWithRetry (proxy autenticado)
                           
                           // Aumentar limite para 1 milhão de caracteres
                           const maxTextLength = 1000000
@@ -9799,14 +9681,6 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                                 try {
                                   setMessage('🤖 Gerando descrição com IA...')
                                   
-                                  const apiKey = readEnv('VITE_GEMINI_API_KEY')
-                                  const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-                                  
-                                  if (!apiKey && !groqApiKey) {
-                                    setMessage('❌ Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
-                                    return
-                                  }
-                                  
                                   const prompt = `Crie uma descrição atrativa e profissional para um curso preparatório online com as seguintes informações:
 
 Nome do Curso: ${courseForm.name}
@@ -9823,31 +9697,23 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
 
                                   let description = ''
                                   
-                                  if (apiKey) {
-                                    try {
-                                      const response = await callGeminiWithRetry(prompt, {
-                                        courseId: editingCourse || selectedCourseForPrompts || null,
-                                        courseContext: {
-                                          name: courseForm.name,
-                                          competition: courseForm.competition,
-                                          banca: courseForm.banca,
-                                        },
-                                        verifyContent: false,
-                                        isLegalContent: false,
-                                        generationConfig: {
-                                          maxOutputTokens: 1024,
-                                          temperature: 0.5,
-                                        },
-                                      })
-                                      description = extractGeneratedText(response).trim()
-                                    } catch (geminiErr) {
-                                      if (groqApiKey) {
-                                        description = await callGroqAPI(prompt)
-                                      } else {
-                                        throw geminiErr
-                                      }
-                                    }
-                                  } else if (groqApiKey) {
+                                  try {
+                                    const response = await callGeminiWithRetry(prompt, {
+                                      courseId: editingCourse || selectedCourseForPrompts || null,
+                                      courseContext: {
+                                        name: courseForm.name,
+                                        competition: courseForm.competition,
+                                        banca: courseForm.banca,
+                                      },
+                                      verifyContent: false,
+                                      isLegalContent: false,
+                                      generationConfig: {
+                                        maxOutputTokens: 1024,
+                                        temperature: 0.5,
+                                      },
+                                    })
+                                    description = extractGeneratedText(response).trim()
+                                  } catch (geminiErr) {
                                     description = await callGroqAPI(prompt)
                                   }
                                   

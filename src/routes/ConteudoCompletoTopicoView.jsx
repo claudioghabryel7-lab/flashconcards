@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
@@ -467,12 +466,6 @@ const ConteudoCompletoTopicoView = () => {
 
   const handleGenerateContent = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setError('API Key não configurada.')
-      return
-    }
-
     let jobId = null
     try {
       setGenerating(true)

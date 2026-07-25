@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import {
   addDoc,
@@ -13,7 +12,6 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import {
   PaperAirplaneIcon,
   XMarkIcon,
@@ -22,6 +20,8 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { createGeminiBrowserClient, fetchGeminiModelsViaProxy } from '../utils/geminiBrowserClient'
+import { callGroqProxy } from '../utils/secureLlmClient'
 
 const MATERIAS = [
   'Português',
@@ -289,14 +289,7 @@ const FloatingAIChat = () => {
     if (availableModel) return // Já tem modelo, não precisa procurar novamente
     
     const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        console.warn('⚠️ VITE_GEMINI_API_KEY não configurada')
-        setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
-        return
-      }
-
-      console.log('🔍 Procurando modelo disponível...')
+      console.log('🔍 Procurando modelo disponível via proxy...')
       
       // Tentar modelos conhecidos diretamente (mais rápido) - apenas os que funcionam
       const knownModels = [
@@ -306,7 +299,7 @@ const FloatingAIChat = () => {
         'gemini-flash-latest',
         'gemini-pro-latest',
       ]
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       
       for (const modelName of knownModels) {
         try {
@@ -319,25 +312,19 @@ const FloatingAIChat = () => {
           setAvailableModel(modelName)
           return
         } catch (err) {
+          if (err?.code === 'auth_required') {
+            setModelError('Faça login para usar a IA.')
+            return
+          }
           console.log(`❌ Modelo ${modelName} não disponível:`, err.message)
           continue
         }
       }
       
-      // Se nenhum modelo conhecido funcionou, tentar listar da API
+      // Se nenhum modelo conhecido funcionou, tentar listar via proxy
       console.log('🔍 Listando modelos da API...')
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          console.error('❌ Erro ao listar modelos:', response.status)
-          setModelError('Erro ao conectar com a API do Gemini')
-          return
-        }
-
-        const data = await response.json()
+        const data = await fetchGeminiModelsViaProxy()
         const models = data.models || []
         const generateModels = models.filter((model) => {
           return (model.supportedGenerationMethods || []).includes('generateContent')
@@ -369,7 +356,11 @@ const FloatingAIChat = () => {
         setModelError('Nenhum modelo disponível funcionou')
       } catch (err) {
         console.error('❌ Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API do Gemini. Verifique sua conexão e API key.')
+        if (err?.code === 'auth_required') {
+          setModelError('Faça login para usar a IA.')
+        } else {
+          setModelError('Erro ao conectar com a API do Gemini. Faça login e tente novamente.')
+        }
       }
     }
 
@@ -492,39 +483,15 @@ ANÁLISE:
 Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestões práticas.`
   }
 
-  // Chamar Groq API como fallback
+  // Chamar Groq API como fallback via proxy autenticado
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile', // Modelo rápido e eficiente
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 800,
-        }),
+      const data = await callGroqProxy({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 800,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
       return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.'
     } catch (err) {
       console.error('Erro ao chamar Groq API:', err)
@@ -534,19 +501,18 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
 
   // Enviar mensagem da IA
   const sendAIMessage = async (userMessage, isInitial = false) => {
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      console.error('❌ API key do Gemini não configurada')
-      const chatRef = collection(db, 'chats', user.uid, 'messages')
-      await addDoc(chatRef, {
-        text: 'Erro: API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env',
-        sender: 'ai',
-        createdAt: serverTimestamp(),
-      })
+    if (!user) {
+      console.error('❌ Usuário não autenticado')
       return
     }
     if (!availableModel) {
       console.error('❌ Modelo não disponível ainda:', availableModel)
+      const chatRef = collection(db, 'chats', user.uid, 'messages')
+      await addDoc(chatRef, {
+        text: modelError || 'Faça login para usar a IA.',
+        sender: 'ai',
+        createdAt: serverTimestamp(),
+      })
       setSending(false)
       return
     }
@@ -560,7 +526,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
     setSending(true)
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const genAI = createGeminiBrowserClient()
       const model = genAI.getGenerativeModel({ model: availableModel })
 
       // Carregar prompt do admin e texto do PDF (por curso)
@@ -771,35 +737,28 @@ Pergunta do aluno: ${userMessage}
       
       // Se detectou erro de quota, usar Groq como fallback
       if (useGroqFallback) {
-        const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-        if (groqApiKey) {
-          try {
-            console.log('🔄 Tentando usar Groq como fallback...')
-            setUsingGroq(true)
-            setQuotaDailyLimit(true)
-            
-            const groqResponse = await callGroqAPI(mentorPrompt)
-            
-            // Se Groq funcionou, salvar resposta e retornar
-            const chatRef = collection(db, 'chats', user.uid, 'messages')
-            await addDoc(chatRef, {
-              text: groqResponse,
-              sender: 'ai',
-              createdAt: serverTimestamp(),
-            })
-            
-            console.log('✅ Groq respondeu com sucesso!')
-            setSending(false)
-            return // Sucesso com Groq
-          } catch (groqErr) {
-            console.error('❌ Erro ao usar Groq como fallback:', groqErr)
-            setUsingGroq(false)
-            // Se Groq também falhar, continuar para mostrar erro
-            throw new Error('QUOTA_DAILY_LIMIT')
-          }
-        } else {
-          // Se não tem Groq configurado, lançar erro
-          console.error('❌ Groq API key não configurada')
+        try {
+          console.log('🔄 Tentando usar Groq como fallback...')
+          setUsingGroq(true)
+          setQuotaDailyLimit(true)
+          
+          const groqResponse = await callGroqAPI(mentorPrompt)
+          
+          // Se Groq funcionou, salvar resposta e retornar
+          const chatRef = collection(db, 'chats', user.uid, 'messages')
+          await addDoc(chatRef, {
+            text: groqResponse,
+            sender: 'ai',
+            createdAt: serverTimestamp(),
+          })
+          
+          console.log('✅ Groq respondeu com sucesso!')
+          setSending(false)
+          return // Sucesso com Groq
+        } catch (groqErr) {
+          console.error('❌ Erro ao usar Groq como fallback:', groqErr)
+          setUsingGroq(false)
+          // Se Groq também falhar, continuar para mostrar erro
           throw new Error('QUOTA_DAILY_LIMIT')
         }
       }
@@ -937,10 +896,9 @@ Você atingiu o limite de 200 requisições/dia do plano gratuito do Google Gemi
    - Planos pagos têm limites muito maiores (milhares de requisições/dia)
    - O custo é baixo: ~$0.0001 por requisição
 
-3. CONFIGURAR NOVA API KEY:
-   - Após fazer upgrade, gere uma nova API key no Google AI Studio
-   - Substitua a VITE_GEMINI_API_KEY no arquivo .env
-   - Reinicie o servidor
+3. CONFIGURAR NO SERVIDOR:
+   - Peça ao administrador para verificar GEMINI_API_KEY no servidor
+   - A chave não fica mais no client (proxy autenticado)
 
 O chat estará disponível novamente amanhã ou após configurar um plano pago.`
       } else if (isQuotaError) {

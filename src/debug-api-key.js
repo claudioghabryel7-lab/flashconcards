@@ -1,14 +1,7 @@
-// Debug para verificar API Key em produção
-console.log('=== DEBUG API KEY ===')
-console.log('API Key presente:', !!import.meta.env.VITE_GEMINI_API_KEY)
-console.log('API Key começa com:', import.meta.env.VITE_GEMINI_API_KEY?.substring(0, 10) + '...')
+// Debug: verifica se o proxy/servidor de IA está acessível (sem logar keys)
+console.log('=== DEBUG AI PROXY ===')
 console.log('Ambiente:', import.meta.env.MODE)
 console.log('NODE_ENV:', import.meta.env.NODE_ENV)
+console.log('API keys NÃO são mais expostas no client.')
+console.log('Use /api/gemini/* e /api/groq/* com login autenticado.')
 console.log('========================')
-
-// Teste rápido da API
-if (import.meta.env.VITE_GEMINI_API_KEY) {
-  console.log('✅ API Key encontrada no ambiente')
-} else {
-  console.error('❌ API Key NÃO encontrada no ambiente!')
-}
