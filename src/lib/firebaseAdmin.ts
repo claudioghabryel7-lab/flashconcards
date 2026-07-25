@@ -8,8 +8,8 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 let app: App | null = null
 let db: Firestore | null = null
 
-export function getFirebaseAdminDb(): Firestore | null {
-  if (db) return db
+/** Inicializa (ou reutiliza) o app Admin. Null se não houver credencial. */
+export function getFirebaseAdminApp(): App | null {
   try {
     if (!getApps().length) {
       const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || ''
@@ -19,16 +19,30 @@ export function getFirebaseAdminDb(): Firestore | null {
       } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
         app = initializeApp()
       } else {
-        console.warn('[firebaseAdmin] Sem credencial de service account — webhook não gravará no Firestore.')
+        console.warn(
+          '[firebaseAdmin] Sem credencial de service account — auth/API e webhook limitados.',
+        )
         return null
       }
     } else {
       app = getApps()[0]!
     }
-    db = getFirestore(app)
-    return db
+    return app
   } catch (err) {
     console.error('[firebaseAdmin] init falhou:', err)
+    return null
+  }
+}
+
+export function getFirebaseAdminDb(): Firestore | null {
+  if (db) return db
+  const adminApp = getFirebaseAdminApp()
+  if (!adminApp) return null
+  try {
+    db = getFirestore(adminApp)
+    return db
+  } catch (err) {
+    console.error('[firebaseAdmin] Firestore falhou:', err)
     return null
   }
 }

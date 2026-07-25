@@ -14,8 +14,8 @@ admin.initializeApp()
 // Configurar transporte de email (usando Gmail)
 const createEmailTransporter = () => {
   // Pegar credenciais do Firebase Config ou variáveis de ambiente ou valores padrão
-  const emailUser = functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'
-  const emailPass = functions.config().email?.password || process.env.EMAIL_PASSWORD || 'rasw vyoj inal ginb'
+  const emailUser = functions.config().email?.user || process.env.EMAIL_USER || ''
+  const emailPass = functions.config().email?.password || process.env.EMAIL_PASSWORD || ''
 
   if (!emailUser || !emailPass) {
     console.error('Credenciais de email não configuradas!')

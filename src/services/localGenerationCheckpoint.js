@@ -442,6 +442,7 @@ export async function prepareQuestoesRun({
   nivel = 1,
   forceFresh = false,
   minCount = QUESTOES_MIN_COMPLETE,
+  targetCount = QUESTOES_TARGET,
 }) {
   const key = `${sanitizeTopicKey(topicKey)}_nivel_${nivel}`
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.QUESTOES, { nivel })
@@ -449,7 +450,13 @@ export async function prepareQuestoesRun({
   if (forceFresh) {
     await deleteDoc(doc(db, 'courses', courseId, 'questoesTopico', key)).catch(() => {})
     await clearCheckpoint(courseId, topicKey, ASSET.QUESTOES, { nivel })
-    return { resume: false, alreadyComplete: false, existingDraft: null }
+    return {
+      resume: false,
+      alreadyComplete: false,
+      existingDraft: null,
+      existingQuestoes: [],
+      startBatch: 1,
+    }
   }
 
   const draft = await loadQuestoesDraft(courseId, topicKey, nivel)
@@ -460,7 +467,13 @@ export async function prepareQuestoesRun({
     hasContent &&
     (cp?.complete || draft.generationComplete === true || draft.status === 'disponivel')
   ) {
-    return { resume: true, alreadyComplete: true, existingDraft: draft }
+    return {
+      resume: true,
+      alreadyComplete: true,
+      existingDraft: draft,
+      existingQuestoes: list,
+      startBatch: Math.ceil(targetCount / QUESTOES_BATCH_SIZE) + 1,
+    }
   }
 
   if (hasContent) {
@@ -471,10 +484,47 @@ export async function prepareQuestoesRun({
       { jobId: jobId || cp?.jobId || null, complete: true, generationDraft: false, itemCount: list.length },
       { nivel },
     )
-    return { resume: true, alreadyComplete: true, existingDraft: draft }
+    return {
+      resume: true,
+      alreadyComplete: true,
+      existingDraft: draft,
+      existingQuestoes: list,
+      startBatch: Math.ceil(targetCount / QUESTOES_BATCH_SIZE) + 1,
+    }
   }
 
-  return { resume: false, alreadyComplete: false, existingDraft: null }
+  // Parcial: retoma do próximo lote sem regastar API
+  if (list.length > 0) {
+    const startBatch = Math.floor(list.length / QUESTOES_BATCH_SIZE) + 1
+    await upsertCheckpoint(
+      courseId,
+      topicKey,
+      ASSET.QUESTOES,
+      {
+        jobId: jobId || cp?.jobId || null,
+        complete: false,
+        generationDraft: true,
+        itemCount: list.length,
+        batchesCompleted: Math.max(0, startBatch - 1),
+      },
+      { nivel },
+    )
+    return {
+      resume: true,
+      alreadyComplete: false,
+      existingDraft: draft,
+      existingQuestoes: list,
+      startBatch,
+    }
+  }
+
+  return {
+    resume: false,
+    alreadyComplete: false,
+    existingDraft: null,
+    existingQuestoes: [],
+    startBatch: 1,
+  }
 }
 
 export async function saveQuestoesCheckpoint({
@@ -485,6 +535,8 @@ export async function saveQuestoesCheckpoint({
   parsed,
   extra = {},
   status = 'indisponivel',
+  complete = true,
+  batchesCompleted = null,
 }) {
   const key = `${contentDocId(topicKey)}_nivel_${nivel}`
   const normalized = normalizeTopicKeyForStorage(topicKey)
@@ -495,9 +547,9 @@ export async function saveQuestoesCheckpoint({
     topicKey: normalized || topicKey,
     nivel,
     generationJobId: jobId || null,
-    generationDraft: false,
-    generationComplete: true,
-    status,
+    generationDraft: !complete,
+    generationComplete: Boolean(complete),
+    status: complete ? status : status || 'indisponivel',
     updatedAt: serverTimestamp(),
     generatedAt: serverTimestamp(),
   }
@@ -512,8 +564,59 @@ export async function saveQuestoesCheckpoint({
     }
   }
 
-  await markCheckpointComplete(courseId, topicKey, ASSET.QUESTOES, jobId, { nivel })
+  if (complete) {
+    await markCheckpointComplete(courseId, topicKey, ASSET.QUESTOES, jobId, { nivel })
+  } else {
+    await upsertCheckpoint(
+      courseId,
+      topicKey,
+      ASSET.QUESTOES,
+      {
+        jobId: jobId || null,
+        complete: false,
+        generationDraft: true,
+        itemCount: list.length,
+        batchesCompleted: batchesCompleted ?? Math.ceil(list.length / QUESTOES_BATCH_SIZE),
+      },
+      { nivel },
+    )
+  }
   return list.length
+}
+
+/** Checkpoint parcial de incidência por disciplina (lotes). */
+export async function loadIncidenciaDraft(courseId, docId) {
+  if (!courseId || !docId) return null
+  const snap = await getDoc(doc(db, 'courses', courseId, 'conteudosIncidencia', docId))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() }
+}
+
+export async function saveIncidenciaPartialCheckpoint({
+  courseId,
+  docId,
+  jobId,
+  parsed,
+  extra = {},
+  complete = false,
+  batchesCompleted = 0,
+}) {
+  if (!courseId || !docId) return
+  await setDoc(
+    doc(db, 'courses', courseId, 'conteudosIncidencia', docId),
+    {
+      ...parsed,
+      ...extra,
+      generationJobId: jobId || null,
+      generationDraft: !complete,
+      generationComplete: Boolean(complete),
+      batchesCompleted,
+      updatedAt: serverTimestamp(),
+      generatedAt: serverTimestamp(),
+      source: 'local_admin_generation',
+    },
+    { merge: true },
+  )
 }
 
 /** Bundle audit passou → não reauditar no retry. */

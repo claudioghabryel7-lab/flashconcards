@@ -3,11 +3,10 @@
  * Resolve erros de alta demanda implementando exponential backoff e modelos alternativos
  * Integra verificação de fontes oficiais para garantir veracidade do conteúdo
  * Implementa RAG (Retrieval-Augmented Generation) com Google Search para evitar alucinações
- * Usa uma única chave: VITE_GEMINI_API_KEY
+ * Browser: proxy autenticado /api/gemini/generate. Servidor: GEMINI_API_KEY.
  */
 
 import { performRAG, googleSearch } from './googleSearch.js'
-import { readEnv } from '../lib/env.js'
 import { fetchCourseAiContext, buildPromptWithCourseContext } from './courseAiContext.js'
 import {
   buildVerificationPrompt,
@@ -139,26 +138,25 @@ function extractSearchTopic(prompt) {
 }
 
 /**
- * Carrega a única API key do Gemini (VITE_GEMINI_API_KEY)
- * @returns {string|undefined}
+ * API key só no servidor Node. No browser sempre undefined (proxy autenticado).
  */
 function getApiKey() {
-  const key = readEnv('VITE_GEMINI_API_KEY')
-  return key || undefined
+  if (typeof window !== 'undefined') return undefined
+  try {
+    // import dinâmico evitado — serverSecrets usa process.env
+    const key =
+      (typeof process !== 'undefined' &&
+        (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) ||
+      ''
+    return key.trim() || undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function callGeminiViaServer(prompt, options = {}) {
-  const response = await fetch('/api/gemini/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, ...options }),
-  })
-
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw new Error(data.error || `Erro na API Gemini (${response.status})`)
-  }
-  return data
+  const { callGeminiProxy } = await import('./secureLlmClient.js')
+  return callGeminiProxy({ prompt, ...options })
 }
 
 /**
@@ -350,12 +348,9 @@ async function executeGeminiRequest(prompt, options = {}) {
 
   const finalPrompt = prompt
 
-  // Teste silencioso para verificar se a API key está disponível
-  let apiKey = await getAvailableApiKey()
-
-  // Sem key no cliente (comum no Next/Vercel) → proxy server-side
-  if (!apiKey && typeof window !== 'undefined') {
-    if (!silent) console.log('🔑 Nenhuma key no cliente — usando /api/gemini/generate')
+  // Browser: sempre proxy autenticado (nunca embute API key no client)
+  if (typeof window !== 'undefined') {
+    if (!silent) console.log('🔑 Gemini via /api/gemini/generate (servidor)')
     return callGeminiViaServer(finalPrompt, {
       generationConfig,
       useGoogleSearch,
@@ -366,14 +361,16 @@ async function executeGeminiRequest(prompt, options = {}) {
     })
   }
 
+  let apiKey = await getAvailableApiKey()
+
   if (!apiKey) {
     throw new Error(
-      'Nenhuma API key do Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local (local) ou nas variáveis do Vercel.'
+      'Nenhuma API key do Gemini no servidor. Defina GEMINI_API_KEY no .env.local ou no Vercel.',
     )
   }
 
   if (!silent) {
-    console.log('🔑 Usando VITE_GEMINI_API_KEY')
+    console.log('🔑 Usando GEMINI_API_KEY (servidor)')
     if (useGoogleSearch) console.log(`🔍 Google Search Grounding ativado`)
     if (useFunctionCalling) console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
@@ -780,27 +777,52 @@ function formatWaitTime(seconds) {
  * @returns {Promise<Array<Object>>} - Lista de status das keys
  */
 export async function checkGeminiApiKeysStatus() {
-  const apiKey = getApiKey()
+  // No browser: testa o proxy (sem revelar a key)
+  if (typeof window !== 'undefined') {
+    try {
+      await callGeminiViaServer('ping', {
+        generationConfig: { maxOutputTokens: 8, temperature: 0 },
+        useGoogleSearch: false,
+        models: [GEMINI_FLASH_MODEL],
+        silent: true,
+      })
+      return [
+        {
+          name: 'GEMINI_API_KEY (servidor)',
+          keyPreview: '••••••••',
+          status: 'ok',
+          message: 'Proxy autenticado OK',
+        },
+      ]
+    } catch (err) {
+      return [
+        {
+          name: 'GEMINI_API_KEY (servidor)',
+          keyPreview: '—',
+          status: 'missing',
+          message: err?.message || 'Configure GEMINI_API_KEY + FIREBASE_SERVICE_ACCOUNT_JSON no servidor.',
+        },
+      ]
+    }
+  }
 
+  const apiKey = getApiKey()
   if (!apiKey) {
     return [
       {
         name: 'Configuração',
         keyPreview: '—',
         status: 'missing',
-        message:
-          'Nenhuma chave encontrada. Configure VITE_GEMINI_API_KEY no .env.local ou no painel do Vercel e faça redeploy.',
+        message: 'Configure GEMINI_API_KEY no servidor.',
       },
     ]
   }
 
-  console.log('🔍 Testando VITE_GEMINI_API_KEY...')
   const status = await testApiKey(apiKey)
-
   return [
     {
-      name: 'VITE_GEMINI_API_KEY',
-      keyPreview: apiKey.substring(0, 10) + '...',
+      name: 'GEMINI_API_KEY',
+      keyPreview: '••••••••',
       ...status,
     },
   ]

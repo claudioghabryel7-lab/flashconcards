@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireApiAuth } from '@/lib/apiAuth'
 import { geminiModel } from '@/lib/gemini'
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request)
+  if ('error' in authResult) return authResult.error
+
   try {
     const { prompt } = await request.json()
 
@@ -12,8 +16,7 @@ export async function POST(request: NextRequest) {
     const result = await geminiModel.generateContent(prompt)
     const response = await result.response
     const text = response.text()
-    
-    // Tentar fazer parse do JSON
+
     let editalData
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/)

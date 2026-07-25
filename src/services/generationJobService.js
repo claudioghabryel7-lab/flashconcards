@@ -16,6 +16,7 @@ import { stripUndefined } from '../utils/firestoreHelpers'
 export const GENERATION_JOB_STATUS = {
   PENDING: 'pending',
   RUNNING: 'running',
+  PAUSED: 'paused',
   WAITING_API: 'waiting_api',
   WAITING_RETRY: 'waiting_retry',
   WAITING_TIMEOUT: 'waiting_timeout',
@@ -76,6 +77,7 @@ function jobsRef(userId) {
 export const GENERATION_ACTIVE_STATUSES = [
   GENERATION_JOB_STATUS.PENDING,
   GENERATION_JOB_STATUS.RUNNING,
+  GENERATION_JOB_STATUS.PAUSED,
   ...GENERATION_WAITING_STATUSES,
 ]
 
@@ -129,6 +131,7 @@ export async function findActiveDuplicateGenerationJob({
       where('status', 'in', [
         GENERATION_JOB_STATUS.PENDING,
         GENERATION_JOB_STATUS.RUNNING,
+        GENERATION_JOB_STATUS.PAUSED,
         GENERATION_JOB_STATUS.WAITING_API,
         GENERATION_JOB_STATUS.WAITING_RETRY,
         GENERATION_JOB_STATUS.WAITING_TIMEOUT,
@@ -152,7 +155,7 @@ export async function createGenerationJob({
   jobType,
   topicKey = null,
   metadata = {},
-  serverPayload: _serverPayload = null,
+  serverPayload: resumePayload = null,
   runOnServer: _runOnServer = false,
 }) {
   if (!userId || !db) throw new Error('Usuário não autenticado.')
@@ -173,7 +176,7 @@ export async function createGenerationJob({
     throw err
   }
 
-  // Geração local na aba do admin — sem Cloud / sem payload no Firestore.
+  // Guarda resumePayload para retomar após pause/reload (checkpoint + mesmo jobType).
   const ref = await addDoc(
     jobsRef(userId),
     stripUndefined({
@@ -184,7 +187,7 @@ export async function createGenerationJob({
       metadata,
       fingerprint: buildGenerationJobFingerprint({ courseId, jobType, topicKey, metadata }),
       runOnServer: false,
-      serverPayload: null,
+      serverPayload: resumePayload || null,
       status: GENERATION_JOB_STATUS.PENDING,
       progress: 0,
       message: 'Aguardando início…',
@@ -262,6 +265,7 @@ export async function reconcileStaleGenerationJobs(userId) {
       where('status', 'in', [
         GENERATION_JOB_STATUS.PENDING,
         GENERATION_JOB_STATUS.RUNNING,
+        GENERATION_JOB_STATUS.PAUSED,
         ...GENERATION_WAITING_STATUSES,
       ]),
     ),
@@ -273,6 +277,10 @@ export async function reconcileStaleGenerationJobs(userId) {
 
   snap.docs.forEach((d) => {
     const data = d.data()
+    // paused: não marca error — usuário pode Continuar / Gerar de novo com checkpoint
+    if (data.status === GENERATION_JOB_STATUS.PAUSED) {
+      return
+    }
     // waiting_* no servidor: resume cron gerencia — não matar no cliente
     if (data.runOnServer && GENERATION_WAITING_STATUSES.includes(data.status)) {
       return
@@ -355,11 +363,57 @@ async function markJobsCancelledLocally(userId, jobIds = []) {
   )
 }
 
+/** Pausa job local (checkpoint preservado; loop em memória espera). */
+export async function pauseGenerationJob(userId, jobId) {
+  if (!userId || !jobId) return { ok: false }
+  const { requestJobPause, hasLocalJobControl } = await import('./generationJobControls')
+  requestJobPause(jobId)
+  await updateGenerationJob(userId, jobId, {
+    status: GENERATION_JOB_STATUS.PAUSED,
+    message: 'Pausado — checkpoint salvo. Clique Continuar para retomar.',
+  })
+  return { ok: true, localAlive: hasLocalJobControl(jobId) }
+}
+
+/**
+ * Retoma job pausado.
+ * Se a aba ainda tem o loop vivo → só despausa.
+ * Se reloadou → reinicia processLocalGenerationJob com forceFresh=false (usa checkpoint).
+ */
+export async function resumeGenerationJob(userId, jobId) {
+  if (!userId || !jobId || !db) return { ok: false }
+
+  const { requestJobResume, hasLocalJobControl, registerJobControl } = await import(
+    './generationJobControls'
+  )
+  const { resumePausedLocalJob } = await import('./aiGenerationRunner')
+
+  if (hasLocalJobControl(jobId)) {
+    requestJobResume(jobId)
+    await updateGenerationJob(userId, jobId, {
+      status: GENERATION_JOB_STATUS.RUNNING,
+      message: 'Retomando…',
+    })
+    return { ok: true, mode: 'unpause' }
+  }
+
+  registerJobControl(jobId)
+  requestJobResume(jobId)
+  const started = await resumePausedLocalJob(userId, jobId)
+  return { ok: Boolean(started?.ok), mode: 'restart', ...started }
+}
+
 export async function dismissGenerationJob(userId, jobId) {
   if (!userId || !jobId) return { ok: false }
 
   markJobCancelling(jobId)
   pauseJobNudge()
+  try {
+    const { requestJobCancel } = await import('./generationJobControls')
+    requestJobCancel(jobId)
+  } catch {
+    /* ignore */
+  }
 
   // Cancela no Firestore primeiro — some do banner na hora
   await markJobsCancelledLocally(userId, [jobId])
@@ -405,6 +459,7 @@ export async function cancelGenerationJob(userId, jobId) {
 const ACTIVE_JOB_STATUSES = [
   GENERATION_JOB_STATUS.PENDING,
   GENERATION_JOB_STATUS.RUNNING,
+  GENERATION_JOB_STATUS.PAUSED,
   ...GENERATION_WAITING_STATUSES,
 ]
 
@@ -421,6 +476,12 @@ export async function cancelAllGenerationJobs(userId) {
   const jobIds = snap.docs.map((d) => d.id)
   jobIds.forEach((id) => markJobCancelling(id))
   pauseJobNudge(300_000)
+  try {
+    const { requestJobCancel } = await import('./generationJobControls')
+    jobIds.forEach((id) => requestJobCancel(id))
+  } catch {
+    /* ignore */
+  }
 
   await markJobsCancelledLocally(userId, jobIds)
 
@@ -510,6 +571,7 @@ export function subscribeActiveGenerationJobs(userId, onData, onError) {
     where('status', 'in', [
       GENERATION_JOB_STATUS.PENDING,
       GENERATION_JOB_STATUS.RUNNING,
+      GENERATION_JOB_STATUS.PAUSED,
       ...GENERATION_WAITING_STATUSES,
     ]),
   )

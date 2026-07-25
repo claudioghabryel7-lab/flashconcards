@@ -1,5 +1,6 @@
 /**
  * Geração de revisão de incidência em lotes (evita JSON cortado por MAX_TOKENS).
+ * Checkpoint parcial por lote — pause/reload retoma sem regastar API.
  */
 import { generateAiJson } from './geminiApi'
 import {
@@ -70,7 +71,11 @@ export function hasUsableIncidenciaPartial(data = {}) {
 function mergeAnalise(chunks = []) {
   const map = new Map()
   for (const block of chunks) {
-    const list = Array.isArray(block?.analisePorTopico) ? block.analisePorTopico : []
+    const list = Array.isArray(block?.analisePorTopico)
+      ? block.analisePorTopico
+      : Array.isArray(block)
+        ? block
+        : []
     for (const item of list) {
       const key = `${String(item?.topicoNumero || '').trim()}::${String(item?.topicoNome || '').trim()}`.toLowerCase()
       if (!key || key === '::') continue
@@ -115,6 +120,11 @@ export async function generateIncidenciaCompleta({
   generateFn = generateAiJson,
   onProgress = async () => {},
   aiOptions = {},
+  existingAnalise = [],
+  startBatch = 1,
+  jobId = null,
+  waitControl = null,
+  onBatchSaved = null,
 }) {
   const lista = normalizeTopicos(topicos)
   const baseOpts = {
@@ -137,8 +147,12 @@ export async function generateIncidenciaCompleta({
     nivelCurso,
   }
 
+  // Retomada parcial: pula chamada única
+  const hasPartial = Array.isArray(existingAnalise) && existingAnalise.length > 0
+
   // Disciplina pequena: tenta 1 chamada; se cortar, cai nos lotes
-  if (lista.length > 0 && lista.length <= INCIDENCIA_TOPICS_PER_BATCH) {
+  if (!hasPartial && lista.length > 0 && lista.length <= INCIDENCIA_TOPICS_PER_BATCH) {
+    if (typeof waitControl === 'function') await waitControl(jobId)
     await onProgress(40, `Gerando incidência: ${disciplinaNome}`)
     try {
       const prompt = buildIncidenciaAutomationPrompt({
@@ -149,7 +163,7 @@ export async function generateIncidenciaCompleta({
       })
       const parsed = await generateFn(prompt, baseOpts)
       if (isIncidenciaContentComplete(parsed, lista.length)) {
-        return {
+        const result = {
           disciplina: disciplinaNome,
           banca: parsed.banca || banca || 'NÃO DEFINIDA',
           cargo: parsed.cargo || cargo || 'NÃO DEFINIDO',
@@ -158,6 +172,10 @@ export async function generateIncidenciaCompleta({
           topAssuntosGerais: parsed.topAssuntosGerais || [],
           dicasEstudo: parsed.dicasEstudo || [],
         }
+        if (typeof onBatchSaved === 'function') {
+          await onBatchSaved({ partial: result, batchesCompleted: 1, complete: true })
+        }
+        return result
       }
       await onProgress(45, `Incidência incompleta — gerando em lotes…`)
     } catch (err) {
@@ -166,9 +184,12 @@ export async function generateIncidenciaCompleta({
   }
 
   const batches = chunk(lista.length ? lista : [{ numero: '', nome: disciplinaNome }], INCIDENCIA_TOPICS_PER_BATCH)
-  const partials = []
+  const partials = hasPartial ? [{ analisePorTopico: existingAnalise }] : []
+  const fromBatch = Math.max(1, Number(startBatch) || 1)
 
-  for (let i = 0; i < batches.length; i += 1) {
+  for (let i = fromBatch - 1; i < batches.length; i += 1) {
+    if (typeof waitControl === 'function') await waitControl(jobId)
+
     const batch = batches[i]
     const pct = 25 + Math.round(((i + 1) / batches.length) * 55)
     await onProgress(pct, `Incidência ${disciplinaNome}: lote ${i + 1}/${batches.length}`)
@@ -183,7 +204,6 @@ export async function generateIncidenciaCompleta({
     })
 
     let parsed = await generateFn(prompt, baseOpts)
-    // Se o lote veio sem revisão útil, tenta 1x de novo
     const okCount = (parsed?.analisePorTopico || []).filter((t) =>
       (t.assuntos || []).some(assuntoHasUsableRevisao),
     ).length
@@ -195,10 +215,28 @@ export async function generateIncidenciaCompleta({
       )
     }
     partials.push(parsed)
+
+    const mergedSoFar = mergeAnalise(partials)
+    if (typeof onBatchSaved === 'function') {
+      await onBatchSaved({
+        partial: {
+          disciplina: disciplinaNome,
+          banca: banca || 'NÃO DEFINIDA',
+          cargo: cargo || 'NÃO DEFINIDO',
+          curso: courseName,
+          analisePorTopico: mergedSoFar,
+          topAssuntosGerais: [],
+          dicasEstudo: [],
+        },
+        batchesCompleted: i + 1,
+        complete: false,
+      })
+    }
   }
 
   const analisePorTopico = mergeAnalise(partials)
 
+  if (typeof waitControl === 'function') await waitControl(jobId)
   await onProgress(88, `Resumo geral de incidência: ${disciplinaNome}`)
   let topAssuntosGerais = []
   let dicasEstudo = []
@@ -237,6 +275,14 @@ export async function generateIncidenciaCompleta({
     )
     err.code = 'incidencia_incomplete'
     throw err
+  }
+
+  if (typeof onBatchSaved === 'function') {
+    await onBatchSaved({
+      partial: result,
+      batchesCompleted: batches.length,
+      complete: true,
+    })
   }
 
   return result

@@ -5,6 +5,8 @@ import {
   ArrowPathIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  PauseIcon,
+  PlayIcon,
 } from '@heroicons/react/24/outline'
 import { useBackgroundGeneration } from '../hooks/useBackgroundGeneration'
 import { useAuth } from '../hooks/useAuth'
@@ -12,6 +14,8 @@ import {
   dismissGenerationJob,
   cancelAllGenerationJobs,
   forceStopAllGenerationJobsGlobally,
+  pauseGenerationJob,
+  resumeGenerationJob,
   GENERATION_JOB_STATUS,
   GENERATION_WAITING_STATUSES,
 } from '../services/generationJobService'
@@ -54,6 +58,10 @@ function isPendingStatus(status) {
   return status === GENERATION_JOB_STATUS.PENDING
 }
 
+function isPausedStatus(status) {
+  return status === GENERATION_JOB_STATUS.PAUSED
+}
+
 function jobAgeSeconds(job, now = Date.now()) {
   const created = job.createdAt?.toDate?.()
   if (!created) return null
@@ -61,6 +69,9 @@ function jobAgeSeconds(job, now = Date.now()) {
 }
 
 function formatJobMessage(job) {
+  if (isPausedStatus(job.status)) {
+    return job.message || 'Pausado — checkpoint salvo'
+  }
   if (isPendingStatus(job.status)) {
     return job.message || 'Iniciando geração…'
   }
@@ -76,17 +87,20 @@ function formatJobMessage(job) {
 }
 
 function formatJobHint(job, now = Date.now()) {
+  if (isPausedStatus(job.status)) {
+    return 'Checkpoint salvo. Continuar retoma de onde parou (sem regastar o que já gerou).'
+  }
   if (isPendingStatus(job.status)) {
     const age = jobAgeSeconds(job, now)
     if (age != null && age >= 90) {
-      return 'Demorando — mantenha esta aba aberta. Se persistir, use Parar (X) e gere outra vez.'
+      return 'Demorando — mantenha esta aba aberta. Use Pausar ou Parar (X) se precisar.'
     }
-    return 'Mantenha esta aba aberta enquanto gera.'
+    return 'Mantenha esta aba aberta. Pausar salva checkpoint; Continuar retoma.'
   }
   if (isWaitingStatus(job.status)) {
     return WAITING_HINTS[job.status] || 'Aguardando API — mantenha a aba aberta.'
   }
-  return 'Mantenha esta aba aberta até concluir.'
+  return 'Pausar salva o progresso. Parar (X) cancela o job.'
 }
 
 function loadMinimized() {
@@ -111,6 +125,8 @@ export default function BackgroundGenerationBanner() {
   const { user, isAdmin } = useAuth()
   const { jobs, subscribeError } = useBackgroundGeneration()
   const [dismissing, setDismissing] = useState({})
+  const [pausing, setPausing] = useState({})
+  const [resuming, setResuming] = useState({})
   const [dismissErrors, setDismissErrors] = useState({})
   const [stoppingAll, setStoppingAll] = useState(false)
   const [stopFeedback, setStopFeedback] = useState(null)
@@ -183,6 +199,50 @@ export default function BackgroundGenerationBanner() {
     }
   }
 
+  const handlePause = async (jobId) => {
+    if (!user?.uid || pausing[jobId]) return
+    setPausing((prev) => ({ ...prev, [jobId]: true }))
+    setDismissErrors((prev) => ({ ...prev, [jobId]: null }))
+    try {
+      await pauseGenerationJob(user.uid, jobId)
+    } catch (err) {
+      setDismissErrors((prev) => ({
+        ...prev,
+        [jobId]: err?.message || 'Não foi possível pausar.',
+      }))
+    } finally {
+      setPausing((prev) => ({ ...prev, [jobId]: false }))
+    }
+  }
+
+  const handleResume = async (jobId) => {
+    if (!user?.uid || resuming[jobId]) return
+    setResuming((prev) => ({ ...prev, [jobId]: true }))
+    setDismissErrors((prev) => ({ ...prev, [jobId]: null }))
+    try {
+      const result = await resumeGenerationJob(user.uid, jobId)
+      if (result?.reason === 'needs_regenerate') {
+        setDismissErrors((prev) => ({
+          ...prev,
+          [jobId]:
+            'Após reload, clique Gerar de novo — o checkpoint evita regastar API no que já foi salvo.',
+        }))
+      } else if (result?.ok === false) {
+        setDismissErrors((prev) => ({
+          ...prev,
+          [jobId]: 'Não foi possível retomar. Tente Gerar novamente.',
+        }))
+      }
+    } catch (err) {
+      setDismissErrors((prev) => ({
+        ...prev,
+        [jobId]: err?.message || 'Não foi possível continuar.',
+      }))
+    } finally {
+      setResuming((prev) => ({ ...prev, [jobId]: false }))
+    }
+  }
+
   const toggleMinimized = (value) => {
     setMinimized(value)
     saveMinimized(value)
@@ -190,7 +250,8 @@ export default function BackgroundGenerationBanner() {
 
   if (minimized) {
     const running = jobs.filter((j) => j.status === GENERATION_JOB_STATUS.RUNNING).length
-    const waiting = jobs.length - running
+    const paused = jobs.filter((j) => j.status === GENERATION_JOB_STATUS.PAUSED).length
+    const waiting = jobs.length - running - paused
 
     return (
       <div className="cp-fixed-br fixed z-[90] flex max-w-[min(20rem,calc(100%-2rem))] flex-col items-end gap-2">
@@ -226,6 +287,7 @@ export default function BackgroundGenerationBanner() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-cp-accent" />
             </span>
             {jobs.length} tarefa{jobs.length !== 1 ? 's' : ''} IA
+            {paused > 0 ? ` · ${paused} pausada${paused !== 1 ? 's' : ''}` : ''}
             {waiting > 0 ? ` · ${waiting} aguardando` : ''}
             <ChevronUpIcon className="h-4 w-4 text-cp-muted" />
           </button>
@@ -279,23 +341,29 @@ export default function BackgroundGenerationBanner() {
       {jobs.map((job) => {
         const waiting = isWaitingStatus(job.status)
         const pending = isPendingStatus(job.status)
+        const paused = isPausedStatus(job.status)
         const waitingTimeout = job.status === GENERATION_JOB_STATUS.WAITING_TIMEOUT
         const stuckPending = pending && (jobAgeSeconds(job, nowTick) ?? 0) >= 90
+        const canPause = job.status === GENERATION_JOB_STATUS.RUNNING || pending
 
         return (
           <div
             key={job.id}
             className={`rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm ${
-              waiting || stuckPending
-                ? 'border-amber-500/40 bg-amber-500/10'
-                : pending
-                  ? 'border-sky-500/30 bg-sky-500/5'
-                  : 'border-cp-accent/30 bg-cp-surface/95'
+              paused
+                ? 'border-violet-500/40 bg-violet-500/10'
+                : waiting || stuckPending
+                  ? 'border-amber-500/40 bg-amber-500/10'
+                  : pending
+                    ? 'border-sky-500/30 bg-sky-500/5'
+                    : 'border-cp-accent/30 bg-cp-surface/95'
             }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
-                {waiting ? (
+                {paused ? (
+                  <PauseIcon className="h-4 w-4 text-violet-600" />
+                ) : waiting ? (
                   waitingTimeout ? (
                     <ArrowPathIcon className="h-4 w-4 animate-spin text-amber-600" />
                   ) : (
@@ -310,28 +378,59 @@ export default function BackgroundGenerationBanner() {
                   {JOB_LABELS[job.jobType] || 'Geração com IA'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => handleDismiss(job.id)}
-                disabled={dismissing[job.id]}
-                className="shrink-0 rounded-lg p-1 text-cp-muted transition hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
-                title="Parar esta tarefa"
-                aria-label="Parar esta tarefa"
-              >
-                <XMarkIcon className="h-4 w-4" />
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                {canPause ? (
+                  <button
+                    type="button"
+                    onClick={() => handlePause(job.id)}
+                    disabled={pausing[job.id]}
+                    className="rounded-lg p-1 text-cp-muted transition hover:bg-violet-500/10 hover:text-violet-600 disabled:opacity-50"
+                    title="Pausar (salva checkpoint)"
+                    aria-label="Pausar esta tarefa"
+                  >
+                    <PauseIcon className="h-4 w-4" />
+                  </button>
+                ) : null}
+                {paused ? (
+                  <button
+                    type="button"
+                    onClick={() => handleResume(job.id)}
+                    disabled={resuming[job.id]}
+                    className="rounded-lg p-1 text-cp-muted transition hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-50"
+                    title="Continuar de onde parou"
+                    aria-label="Continuar esta tarefa"
+                  >
+                    <PlayIcon className="h-4 w-4" />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleDismiss(job.id)}
+                  disabled={dismissing[job.id]}
+                  className="rounded-lg p-1 text-cp-muted transition hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
+                  title="Parar / cancelar esta tarefa"
+                  aria-label="Parar esta tarefa"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <p
               className={`mt-1 text-xs ${
-                waiting || stuckPending
-                  ? 'text-amber-800 dark:text-amber-200'
-                  : pending
-                    ? 'text-sky-800 dark:text-sky-200'
-                    : 'text-cp-muted'
+                paused
+                  ? 'text-violet-800 dark:text-violet-200'
+                  : waiting || stuckPending
+                    ? 'text-amber-800 dark:text-amber-200'
+                    : pending
+                      ? 'text-sky-800 dark:text-sky-200'
+                      : 'text-cp-muted'
               }`}
             >
               {formatJobMessage(job)}
-              {!waiting && !pending && typeof job.progress === 'number' && job.progress > 0
+              {!waiting && !pending && !paused && typeof job.progress === 'number' && job.progress > 0
+                ? ` (${job.progress}%)`
+                : ''}
+              {paused && typeof job.progress === 'number' && job.progress > 0
                 ? ` (${job.progress}%)`
                 : ''}
             </p>

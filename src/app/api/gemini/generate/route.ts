@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readEnv } from '@/lib/env.js'
+import { requireApiAuth } from '@/lib/apiAuth'
+import { getGeminiApiKey } from '@/lib/serverSecrets'
 import { getDefaultGeminiModels } from '@/utils/geminiModels.js'
 
 const DEFAULT_MODELS = getDefaultGeminiModels()
 
-function getServerApiKey(): string {
-  return readEnv('VITE_GEMINI_API_KEY') || ''
-}
-
 export async function POST(request: NextRequest) {
+  const authResult = await requireApiAuth(request)
+  if ('error' in authResult) return authResult.error
+
   try {
     const body = await request.json()
     const {
       prompt,
       generationConfig = { temperature: 0.35, maxOutputTokens: 32000 },
       useGoogleSearch = true,
-      verifyContent = true,
-      courseId = null,
       useFunctionCalling = false,
       tools = [],
       models = DEFAULT_MODELS,
@@ -26,20 +24,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Prompt é obrigatório' }, { status: 400 })
     }
 
-    const apiKey = getServerApiKey()
+    const apiKey = getGeminiApiKey()
     if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            'Nenhuma API key Gemini no servidor. Configure VITE_GEMINI_API_KEY no .env.local ou no Vercel.',
+            'Nenhuma API key Gemini no servidor. Configure GEMINI_API_KEY (recomendado) no .env.local ou no Vercel.',
         },
-        { status: 503 }
+        { status: 503 },
       )
     }
 
     let lastError = 'Erro desconhecido'
+    const modelList = Array.isArray(models) && models.length ? models : DEFAULT_MODELS
 
-    for (const model of models) {
+    for (const model of modelList) {
       const requestBody: Record<string, unknown> = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig,
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
-        }
+        },
       )
 
       const data = await response.json()
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
     console.error('[api/gemini/generate]', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Falha ao chamar Gemini' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

@@ -1,5 +1,6 @@
 /**
  * Google Search API Integration for RAG (Retrieval-Augmented Generation)
+ * No browser: usa /api/google-search (key só no servidor).
  */
 
 import { readEnv } from '../lib/env.js'
@@ -11,8 +12,27 @@ import { readEnv } from '../lib/env.js'
  * @returns {Promise<Array>} - Array of search results with title, snippet, and link
  */
 export async function googleSearch(query, numResults = 5) {
-  const apiKey = readEnv('VITE_GOOGLE_SEARCH_API_KEY')
-  const searchEngineId = readEnv('VITE_GOOGLE_SEARCH_ENGINE_ID')
+  // Browser → proxy autenticado
+  if (typeof window !== 'undefined') {
+    try {
+      const { googleSearchProxy } = await import('./secureLlmClient.js')
+      const data = await googleSearchProxy(query, numResults)
+      return Array.isArray(data?.items) ? data.items : []
+    } catch (error) {
+      console.warn('Google Search proxy falhou:', error?.message || error)
+      return []
+    }
+  }
+
+  // Servidor Node — key direta
+  const apiKey =
+    (typeof process !== 'undefined' &&
+      (process.env.GOOGLE_SEARCH_API_KEY || process.env.VITE_GOOGLE_SEARCH_API_KEY)) ||
+    readEnv('GOOGLE_SEARCH_API_KEY')
+  const searchEngineId =
+    (typeof process !== 'undefined' &&
+      (process.env.GOOGLE_SEARCH_ENGINE_ID || process.env.VITE_GOOGLE_SEARCH_ENGINE_ID)) ||
+    readEnv('GOOGLE_SEARCH_ENGINE_ID')
 
   if (!apiKey || !searchEngineId) {
     console.warn('Google Search API credentials not configured. Skipping search.')
@@ -21,23 +41,23 @@ export async function googleSearch(query, numResults = 5) {
 
   try {
     const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}&num=${numResults}`
-    
+
     const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`Google Search API error: ${response.status}`)
     }
 
     const data = await response.json()
-    
+
     if (!data.items) {
       return []
     }
 
-    return data.items.map(item => ({
+    return data.items.map((item) => ({
       title: item.title,
       snippet: item.snippet,
       link: item.link,
-      displayLink: item.displayLink
+      displayLink: item.displayLink,
     }))
   } catch (error) {
     console.error('Error performing Google Search:', error)
@@ -57,12 +77,12 @@ export async function searchLegalInfo(topic, numResults = 5) {
     'site:planalto.gov.br',
     'site:stf.jus.br',
     'site:stj.jus.br',
-    'site:legislacao.planalto.gov.br'
+    'site:legislacao.planalto.gov.br',
   ]
-  
+
   const siteFilter = legalSites.join(' OR ')
   const query = `${topic} ${siteFilter}`
-  
+
   return googleSearch(query, numResults)
 }
 
@@ -77,7 +97,7 @@ export function formatSearchContext(results) {
   }
 
   let context = '🔍 CONTEXTO DE BUSCA NO GOOGLE (INFORMAÇÕES ATUALIZADAS):\n\n'
-  
+
   results.forEach((result, index) => {
     context += `${index + 1}. **${result.title}**\n`
     context += `   Fonte: ${result.displayLink}\n`
@@ -85,8 +105,9 @@ export function formatSearchContext(results) {
     context += `   Link: ${result.link}\n\n`
   })
 
-  context += '⚠️ INSTRUÇÃO CRÍTICA: Use APENAS as informações acima para responder. Se a busca não retornar informações relevantes, use seu conhecimento treinado mas cite explicitamente que não há confirmação recente.\n\n'
-  
+  context +=
+    '⚠️ INSTRUÇÃO CRÍTICA: Use APENAS as informações acima para responder. Se a busca não retornar informações relevantes, use seu conhecimento treinado mas cite explicitamente que não há confirmação recente.\n\n'
+
   return context
 }
 
@@ -97,9 +118,7 @@ export function formatSearchContext(results) {
  * @returns {Promise<string>} - Formatted context string for AI prompt
  */
 export async function performRAG(topic, isLegal = true) {
-  const results = isLegal 
-    ? await searchLegalInfo(topic, 5)
-    : await googleSearch(topic, 5)
-  
+  const results = isLegal ? await searchLegalInfo(topic, 5) : await googleSearch(topic, 5)
+
   return formatSearchContext(results)
 }

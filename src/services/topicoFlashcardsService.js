@@ -165,7 +165,8 @@ export async function generateAndSaveFlashcardsForTopico({
     serverPayload: buildFlashcardsTopicoPayload({
       courseId: resolvedId,
       status: initialStatus,
-      forceRegenerate: true,
+      // false = retoma checkpoint se pausou/parou no meio
+      forceRegenerate: false,
       flashcardMeta,
       materialParsed,
     }),

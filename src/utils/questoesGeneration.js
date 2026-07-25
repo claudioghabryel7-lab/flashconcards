@@ -15,6 +15,7 @@ import {
 
 /**
  * Gera N questões em lotes menores para não cortar por MAX_TOKENS.
+ * Aceita existing + onBatchSaved para checkpoint/retomada.
  */
 export async function generateQuestoesInBatches({
   buildBatchPrompt,
@@ -23,14 +24,23 @@ export async function generateQuestoesInBatches({
   examCtx = {},
   aiOptions = {},
   onBatchProgress,
+  onBatchSaved,
+  existingQuestoes = [],
+  startBatch = 1,
+  jobId = null,
+  waitControl = null,
 } = {}) {
   const exam = normalizeExamContext(examCtx)
   const tipoProva = exam.tipoProva
   const batches = Math.ceil(total / batchSize)
-  const all = []
+  const all = [...(existingQuestoes || [])]
   let droppedTotal = 0
 
-  for (let i = 0; i < batches; i += 1) {
+  for (let i = Math.max(0, startBatch - 1); i < batches; i += 1) {
+    if (typeof waitControl === 'function') {
+      await waitControl(jobId)
+    }
+
     const remaining = total - all.length
     if (remaining <= 0) break
     const count = Math.min(batchSize, remaining)
@@ -53,6 +63,7 @@ export async function generateQuestoesInBatches({
       exam,
       tipoProva,
       tipoLabel: formatTipoProvaLabel(tipoProva),
+      existingCount: all.length,
     })
 
     const parsed = await generateAiJson(prompt, {
@@ -65,6 +76,10 @@ export async function generateQuestoesInBatches({
       maxContinues: 2,
     })
 
+    if (typeof waitControl === 'function') {
+      await waitControl(jobId)
+    }
+
     const { ok, dropped } = filterValidQuestoes(parsed?.questoes || parsed, {
       tipoProva,
       banca: exam.banca,
@@ -72,6 +87,16 @@ export async function generateQuestoesInBatches({
     })
     droppedTotal += dropped
     all.push(...ok)
+
+    if (typeof onBatchSaved === 'function') {
+      await onBatchSaved({
+        batchNumber,
+        batches,
+        questoes: all.slice(0, total).map((q, idx) => ({ ...q, numero: idx + 1 })),
+        generated: all.length,
+        total,
+      })
+    }
   }
 
   if (all.length < Math.min(5, total)) {

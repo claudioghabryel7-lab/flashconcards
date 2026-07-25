@@ -3,23 +3,21 @@ import type { NextConfig } from 'next'
 
 loadEnvConfig(process.cwd())
 
-const viteEnvKeys = [
+/** Apenas valores seguros para o bundle do browser. Secrets LLM NÃO entram aqui. */
+const clientEnvKeys = [
   'VITE_FIREBASE_API_KEY',
   'VITE_FIREBASE_AUTH_DOMAIN',
   'VITE_FIREBASE_PROJECT_ID',
   'VITE_FIREBASE_STORAGE_BUCKET',
   'VITE_FIREBASE_MESSAGING_SENDER_ID',
   'VITE_FIREBASE_APP_ID',
-  'VITE_GEMINI_API_KEY',
-  'VITE_GROQ_API_KEY',
   'VITE_GEMINI_MODEL',
-  'VITE_GOOGLE_SEARCH_API_KEY',
-  'VITE_GOOGLE_SEARCH_ENGINE_ID',
+  'VITE_GEMINI_TTS_MODEL',
   'VITE_MERCADOPAGO_PUBLIC_KEY',
 ]
 
 const env: Record<string, string> = {}
-for (const key of viteEnvKeys) {
+for (const key of clientEnvKeys) {
   env[key] = process.env[key] || ''
 }
 

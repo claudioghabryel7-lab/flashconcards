@@ -92,9 +92,13 @@ export default function AdminGenerationJobs() {
   }
 
   const active = jobs.filter((j) =>
-    [GENERATION_JOB_STATUS.PENDING, GENERATION_JOB_STATUS.RUNNING, 'waiting_quota', 'waiting_resume'].includes(
-      j.status,
-    ),
+    [
+      GENERATION_JOB_STATUS.PENDING,
+      GENERATION_JOB_STATUS.RUNNING,
+      GENERATION_JOB_STATUS.PAUSED,
+      'waiting_quota',
+      'waiting_resume',
+    ].includes(j.status),
   )
 
   return (
@@ -146,7 +150,13 @@ export default function AdminGenerationJobs() {
               </tr>
             )}
             {jobs.map((job) => {
-              const canCancel = ['pending', 'running', 'waiting_quota', 'waiting_resume'].includes(job.status)
+              const canCancel = [
+                'pending',
+                'running',
+                'paused',
+                'waiting_quota',
+                'waiting_resume',
+              ].includes(job.status)
               return (
                 <tr key={job.id}>
                   <td className="px-3 py-2 font-mono text-xs">{job.jobType || '—'}</td>

@@ -7,6 +7,15 @@ import {
 } from './generationJobService'
 import { formatAiErrorForUser } from '../utils/geminiApi'
 import { processLocalGenerationJob } from './localJobProcessor'
+import {
+  registerJobControl,
+  clearJobControl,
+  waitForJobControl,
+  JobCancelledError,
+  JobPausedExitError,
+} from './generationJobControls'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../firebase/config'
 
 /** Promessas ativas — sobrevivem a desmontagem de componentes React. */
 const activeTasks = new Map()
@@ -14,10 +23,14 @@ const activeTasks = new Map()
 const activeByFingerprint = new Map()
 /** fingerprint → Promise do start em andamento (claim síncrono). */
 const startingByFingerprint = new Map()
+/** jobId → fingerprint */
+const fingerprintByJobId = new Map()
 
 async function executeJob(userId, jobId, task, fingerprint = null) {
+  registerJobControl(jobId)
   try {
     const updateProgress = async (progress, message) => {
+      await waitForJobControl(jobId)
       await updateGenerationJob(userId, jobId, {
         status: GENERATION_JOB_STATUS.RUNNING,
         progress: Math.min(100, Math.max(0, progress ?? 0)),
@@ -36,6 +49,24 @@ async function executeJob(userId, jobId, task, fingerprint = null) {
 
     return result
   } catch (error) {
+    if (error instanceof JobCancelledError || error?.code === 'job_cancelled') {
+      await updateGenerationJob(userId, jobId, {
+        status: GENERATION_JOB_STATUS.CANCELLED,
+        progress: 100,
+        message: 'Cancelado',
+      }).catch(() => {})
+      throw error
+    }
+
+    // Pause com saída controlada (raro) — mantém paused
+    if (error instanceof JobPausedExitError || error?.code === 'job_paused') {
+      await updateGenerationJob(userId, jobId, {
+        status: GENERATION_JOB_STATUS.PAUSED,
+        message: 'Pausado — checkpoint salvo. Clique Continuar para retomar.',
+      }).catch(() => {})
+      throw error
+    }
+
     const userMessage = formatAiErrorForUser(error)
     await updateGenerationJob(userId, jobId, {
       status: GENERATION_JOB_STATUS.ERROR,
@@ -52,6 +83,12 @@ async function executeJob(userId, jobId, task, fingerprint = null) {
     activeTasks.delete(jobId)
     if (fingerprint && activeByFingerprint.get(fingerprint)?.jobId === jobId) {
       activeByFingerprint.delete(fingerprint)
+    }
+    fingerprintByJobId.delete(jobId)
+    // Só limpa controle se não estiver pausado (resume precisa do flag)
+    const { isJobPausedLocal, clearJobControl: clearCtrl } = await import('./generationJobControls')
+    if (!isJobPausedLocal(jobId)) {
+      clearCtrl(jobId)
     }
   }
 }
@@ -132,6 +169,20 @@ export async function startBackgroundGeneration({
       metadata,
     })
     if (remote?.id) {
+      // Se o duplicado está pausado, retoma em vez de erro
+      if (remote.status === GENERATION_JOB_STATUS.PAUSED) {
+        const resumed = await resumePausedLocalJob(userId, remote.id)
+        if (resumed?.ok) {
+          const result = {
+            jobId: remote.id,
+            promise: resumed.promise || Promise.resolve(),
+            duplicate: true,
+            resumed: true,
+          }
+          claim.gate._resolve(result)
+          return result
+        }
+      }
       const err = new Error(
         `Já existe um job ativo gerando o mesmo conteúdo (${String(remote.id).slice(0, 8)}…). Aguarde terminar.`,
       )
@@ -146,7 +197,7 @@ export async function startBackgroundGeneration({
       jobType,
       topicKey,
       metadata,
-      serverPayload: null,
+      serverPayload: hasPayload ? { ...serverPayload, forceFresh: false } : null,
       runOnServer: false,
     })
 
@@ -157,7 +208,7 @@ export async function startBackgroundGeneration({
             processLocalGenerationJob({
               jobType,
               courseId,
-              serverPayload,
+              serverPayload: { ...serverPayload, forceFresh: Boolean(serverPayload?.forceFresh) },
               updateProgress,
               userId,
               jobId: activeJobId || jobId,
@@ -165,10 +216,12 @@ export async function startBackgroundGeneration({
 
     const promise = executeJob(userId, jobId, localTask, fingerprint)
     promise.catch((err) => {
+      if (err?.code === 'job_cancelled' || err?.code === 'job_paused') return
       console.error('[generation] task falhou:', err?.message || err)
     })
     activeTasks.set(jobId, promise)
     activeByFingerprint.set(fingerprint, { jobId, promise })
+    fingerprintByJobId.set(jobId, fingerprint)
 
     const result = { jobId, promise, duplicate: false }
     claim.gate._resolve(result)
@@ -185,6 +238,84 @@ export async function startBackgroundGeneration({
   } finally {
     startingByFingerprint.delete(fingerprint)
   }
+}
+
+/**
+ * Reinicia um job pausado após reload da aba (usa checkpoint + serverPayload salvo).
+ */
+export async function resumePausedLocalJob(userId, jobId) {
+  if (!userId || !jobId || !db) return { ok: false }
+
+  if (activeTasks.has(jobId)) {
+    const { requestJobResume } = await import('./generationJobControls')
+    requestJobResume(jobId)
+    await updateGenerationJob(userId, jobId, {
+      status: GENERATION_JOB_STATUS.RUNNING,
+      message: 'Retomando…',
+    })
+    return { ok: true, mode: 'unpause', promise: activeTasks.get(jobId) }
+  }
+
+  const snap = await getDoc(doc(db, 'users', userId, 'generationJobs', jobId))
+  if (!snap.exists()) return { ok: false, reason: 'not_found' }
+  const data = snap.data() || {}
+
+  const courseId = data.courseId
+  const jobType = data.jobType
+  const serverPayload = {
+    ...(data.serverPayload || {}),
+    forceFresh: false,
+  }
+
+  if (!courseId || !jobType) {
+    return { ok: false, reason: 'missing_resume_data' }
+  }
+
+  // Jobs com task custom sem payload: usuário precisa gerar de novo (checkpoint ainda ajuda)
+  if (!data.serverPayload && !['guia_mentorado_automation', 'guia_mentorado_backfill', 'guia_mentorado_cronograma', 'professor_supervisor'].includes(jobType)) {
+    await updateGenerationJob(userId, jobId, {
+      status: GENERATION_JOB_STATUS.PAUSED,
+      message:
+        'Pausado após reload. Clique Gerar novamente — o checkpoint evita regastar API no que já foi salvo.',
+    })
+    return { ok: false, reason: 'needs_regenerate', checkpointSafe: true }
+  }
+
+  const fingerprint =
+    data.fingerprint ||
+    buildGenerationJobFingerprint({
+      courseId,
+      jobType,
+      topicKey: data.topicKey,
+      metadata: data.metadata || {},
+    })
+
+  registerJobControl(jobId)
+  await updateGenerationJob(userId, jobId, {
+    status: GENERATION_JOB_STATUS.RUNNING,
+    message: 'Retomando do checkpoint…',
+  })
+
+  const localTask = async ({ updateProgress, jobId: activeJobId }) =>
+    processLocalGenerationJob({
+      jobType,
+      courseId,
+      serverPayload,
+      updateProgress,
+      userId,
+      jobId: activeJobId || jobId,
+    })
+
+  const promise = executeJob(userId, jobId, localTask, fingerprint)
+  promise.catch((err) => {
+    if (err?.code === 'job_cancelled' || err?.code === 'job_paused') return
+    console.error('[generation] resume falhou:', err?.message || err)
+  })
+  activeTasks.set(jobId, promise)
+  activeByFingerprint.set(fingerprint, { jobId, promise })
+  fingerprintByJobId.set(jobId, fingerprint)
+
+  return { ok: true, mode: 'restart', promise }
 }
 
 /** Compat: executa sem job se não houver usuário. */
@@ -209,3 +340,5 @@ export function isGenerationRunning(jobId) {
 export function getActiveJobByFingerprint(fingerprint) {
   return activeByFingerprint.get(fingerprint) || null
 }
+
+export { clearJobControl, waitForJobControl }

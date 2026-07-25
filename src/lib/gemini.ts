@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { readEnv } from './env.js'
+import { getGeminiApiKey } from './serverSecrets'
 import {
   GEMINI_FLASH_MODEL,
   GEMINI_FLASH_FALLBACK_MODEL,
@@ -9,7 +9,10 @@ import {
 const MODELS = [GEMINI_FLASH_MODEL, GEMINI_FLASH_FALLBACK_MODEL, GEMINI_PRO_MODEL]
 
 function getApiKey() {
-  return readEnv('VITE_GEMINI_API_KEY') || ''
+  if (typeof window !== 'undefined') {
+    throw new Error('gemini.ts é server-only. Use createGeminiBrowserClient() no client.')
+  }
+  return getGeminiApiKey() || ''
 }
 
 let genAI: GoogleGenerativeAI | null = null
@@ -18,7 +21,7 @@ function getGenAI() {
   if (!genAI) {
     const apiKey = getApiKey()
     if (!apiKey) {
-      throw new Error('Chave Gemini não configurada no .env')
+      throw new Error('Chave Gemini não configurada (GEMINI_API_KEY)')
     }
     genAI = new GoogleGenerativeAI(apiKey)
   }

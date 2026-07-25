@@ -16,5 +16,5 @@ export function useBackgroundGeneration() {
     return subscribeActiveGenerationJobs(user.uid, setJobs)
   }, [user?.uid])
 
-  return { jobs, hasActiveJobs: jobs.length > 0 }
+  return { jobs, hasActiveJobs: jobs.length > 0, subscribeError: null }
 }

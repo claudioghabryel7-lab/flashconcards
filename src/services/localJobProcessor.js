@@ -49,8 +49,11 @@ import {
   loadMaterialDraft,
   saveMaterialCheckpoint,
   saveQuestoesCheckpoint,
+  saveIncidenciaPartialCheckpoint,
+  loadIncidenciaDraft,
   setFlashcardsStatus,
 } from './localGenerationCheckpoint'
+import { waitForJobControl } from './generationJobControls'
 import {
   generateIncidenciaCompleta,
   isIncidenciaContentComplete,
@@ -207,21 +210,27 @@ async function processPromptSave(
       }
     }
   }
+  let questoesPrep = null
   if (topicKey && extra.contentType === 'questoes') {
     const nivel = extra.nivel ?? 1
-    const prep = await prepareQuestoesRun({
+    const totalQuestoes =
+      Number(serverPayload?.quantidadeQuestoes) > 0
+        ? Number(serverPayload.quantidadeQuestoes)
+        : QUESTOES_TARGET
+    questoesPrep = await prepareQuestoesRun({
       courseId,
       topicKey,
       jobId,
       nivel,
       forceFresh,
       minCount: QUESTOES_MIN_COMPLETE,
+      targetCount: totalQuestoes,
     })
-    if (prep.alreadyComplete && prep.existingDraft) {
+    if (questoesPrep.alreadyComplete && questoesPrep.existingDraft) {
       await updateProgress(90, `${label} já no checkpoint — pulando API`)
       return {
         resultRef: { collection: collectionName, docId, resumed: true },
-        parsed: prep.existingDraft,
+        parsed: questoesPrep.existingDraft,
         resumed: true,
       }
     }
@@ -236,6 +245,7 @@ async function processPromptSave(
     disciplina,
   })
 
+  await waitForJobControl(jobId)
   await updateProgress(10, `Gerando ${label} (Google Search automático)…`)
   const dossier = topicKey
     ? await getGoogleAiTopicDossierOptional(
@@ -251,7 +261,7 @@ async function processPromptSave(
     : null
   await updateProgress(20, dossier?.text ? `Gerando ${label} com dossiê + Search…` : `Gerando ${label}…`)
 
-  // Questões: sempre em lotes (evita truncar em ~12 quando o alvo é 50)
+  // Questões: lotes + checkpoint após cada lote (pause/reload retoma)
   if (topicKey && extra.contentType === 'questoes') {
     const totalQuestoes =
       Number(serverPayload?.quantidadeQuestoes) > 0
@@ -263,15 +273,27 @@ async function processPromptSave(
       extra.topico || serverPayload?.savePlan?.topicoNome || topicKey || '',
       'questoes',
     )
+    const existingQuestoes = questoesPrep?.existingQuestoes || []
+    const startBatch = questoesPrep?.startBatch || 1
+    if (existingQuestoes.length > 0) {
+      await updateProgress(
+        22,
+        `Retomando ${label} — lote ${startBatch} (${existingQuestoes.length} já no checkpoint)…`,
+      )
+    }
     const batchResult = await generateQuestoesInBatches({
       total: totalQuestoes,
       batchSize: QUESTOES_BATCH_SIZE,
       examCtx,
-      buildBatchPrompt: ({ batchNumber, batches, count }) => `${promptWithDossier}
+      existingQuestoes,
+      startBatch,
+      jobId,
+      waitControl: waitForJobControl,
+      buildBatchPrompt: ({ batchNumber, batches, count, existingCount }) => `${promptWithDossier}
 
 ═══ LOTE ${batchNumber}/${batches} ═══
-Ignore qualquer quantidade anterior neste prompt.
-Gere EXATAMENTE ${count} questões neste lote (parte de ${totalQuestoes} no total).
+Já existem ${existingCount || 0} questões salvas — NÃO as repita.
+Gere EXATAMENTE ${count} questões novas neste lote (parte de ${totalQuestoes} no total).
 Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
       aiOptions: {
         courseId,
@@ -293,6 +315,30 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
           `Gerando ${label} lote ${batchNumber}/${batches} (${generated}/${total})…`,
         )
       },
+      onBatchSaved: async ({ batchNumber, questoes, generated, total }) => {
+        const done = generated >= total
+        await saveQuestoesCheckpoint({
+          courseId,
+          topicKey,
+          jobId,
+          nivel: extra.nivel ?? 1,
+          parsed: {
+            questoes,
+            tipoProva: examCtx.tipoProva,
+            banca: examCtx.banca,
+            cargo: examCtx.cargo,
+            concurso: examCtx.concursoName,
+          },
+          extra: { topico: extra.topico, disciplina, ...extra },
+          status,
+          complete: done,
+          batchesCompleted: batchNumber,
+        })
+        await updateProgress(
+          Math.min(20 + Math.round((generated / Math.max(total, 1)) * 60) + 2, 84),
+          `Checkpoint questões: lote ${batchNumber} (${generated}/${total})`,
+        )
+      },
     })
     const parsed = {
       questoes: batchResult.questoes,
@@ -301,7 +347,7 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
       cargo: examCtx.cargo,
       concurso: examCtx.concursoName,
     }
-    await updateProgress(85, `Salvando ${label} (checkpoint)…`)
+    await updateProgress(85, `Finalizando ${label} (checkpoint)…`)
     await saveQuestoesCheckpoint({
       courseId,
       topicKey,
@@ -310,8 +356,13 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
       parsed,
       extra: { topico: extra.topico, disciplina, ...extra },
       status,
+      complete: true,
     })
-    return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
+    return {
+      resultRef: { collection: collectionName, docId },
+      parsed,
+      resumed: Boolean(questoesPrep?.resume),
+    }
   }
 
   const parsed = await generateAiJson(appendGoogleAiDossier(prompt, dossier?.text), {
@@ -464,6 +515,7 @@ async function processFlashcardsTopico(
   )
 
   for (let batchNum = startBatch; batchNum <= batchCount; batchNum += 1) {
+    await waitForJobControl(jobId)
     const remaining = FLASHCARD_TARGET - allCards.length
     if (remaining <= 0) break
     const cardsInBatch = Math.min(FLASHCARD_BATCH_SIZE, remaining)
@@ -1664,7 +1716,12 @@ Retorne APENAS JSON:
   return { resultRef: { collection: 'editalVerticalizado', docId: 'atual' }, parsed }
 }
 
-async function processConteudoIncidencia(courseId, serverPayload, updateProgress) {
+async function processConteudoIncidencia(
+  courseId,
+  serverPayload,
+  updateProgress,
+  { jobId = null } = {},
+) {
   const savePlan = serverPayload?.savePlan || {}
   const disciplinaNome = savePlan.disciplinaNome || serverPayload?.disciplinaNome || 'Disciplina'
   const docId = savePlan.docId || sanitizeDisciplinaDocId(disciplinaNome)
@@ -1674,15 +1731,16 @@ async function processConteudoIncidencia(courseId, serverPayload, updateProgress
     : Array.isArray(serverPayload?.topicos)
       ? serverPayload.topicos
       : []
+  const forceFresh = Boolean(serverPayload?.forceFresh)
 
   // Já completo? não regera
   try {
-    const existing = await getDoc(doc(db, 'courses', courseId, 'conteudosIncidencia', docId))
-    if (existing.exists() && isIncidenciaContentComplete(existing.data(), topicos.length)) {
+    const existing = await loadIncidenciaDraft(courseId, docId)
+    if (existing && isIncidenciaContentComplete(existing, topicos.length) && !forceFresh) {
       await updateProgress(95, `Incidência de ${disciplinaNome} já completa — pulando`)
       return {
         resultRef: { collection: 'conteudosIncidencia', docId, resumed: true },
-        parsed: existing.data(),
+        parsed: existing,
         resumed: true,
       }
     }
@@ -1690,7 +1748,17 @@ async function processConteudoIncidencia(courseId, serverPayload, updateProgress
     /* segue geração */
   }
 
+  const existingDraft = forceFresh ? null : await loadIncidenciaDraft(courseId, docId)
+  const existingPartials =
+    !forceFresh && Array.isArray(existingDraft?.analisePorTopico)
+      ? existingDraft.analisePorTopico
+      : []
+  const startBatch = Number(existingDraft?.batchesCompleted) > 0
+    ? Number(existingDraft.batchesCompleted) + 1
+    : 1
+
   const meta = serverPayload?.courseMeta || {}
+  await waitForJobControl(jobId)
   const parsed = await generateIncidenciaCompleta({
     disciplinaNome,
     topicos,
@@ -1704,6 +1772,24 @@ async function processConteudoIncidencia(courseId, serverPayload, updateProgress
     generateFn: generateAiJson,
     onProgress: updateProgress,
     aiOptions: serverPayload?.aiOptions || {},
+    existingAnalise: existingPartials,
+    startBatch,
+    jobId,
+    waitControl: waitForJobControl,
+    onBatchSaved: async ({ partial, batchesCompleted, complete }) => {
+      await saveIncidenciaPartialCheckpoint({
+        courseId,
+        docId,
+        jobId,
+        parsed: {
+          ...partial,
+          disciplina: disciplinaNome,
+        },
+        extra: { disciplinaIdx: savePlan.disciplinaIdx, status },
+        complete: Boolean(complete),
+        batchesCompleted,
+      })
+    },
   })
 
   await updateProgress(92, `Salvando incidência: ${disciplinaNome}`)
@@ -1711,7 +1797,16 @@ async function processConteudoIncidencia(courseId, serverPayload, updateProgress
     disciplinaIdx: savePlan.disciplinaIdx,
     status,
   })
-  return { resultRef, parsed, resumed: false }
+  await saveIncidenciaPartialCheckpoint({
+    courseId,
+    docId,
+    jobId,
+    parsed,
+    extra: { disciplinaIdx: savePlan.disciplinaIdx, status },
+    complete: true,
+    batchesCompleted: 999,
+  })
+  return { resultRef, parsed, resumed: existingPartials.length > 0 }
 }
 
 async function processGuiaMentoradoIncidenciaDay(
@@ -1756,6 +1851,7 @@ async function processGuiaMentoradoIncidenciaDay(
         courseId,
         {
           courseMeta,
+          forceFresh: false,
           savePlan: {
             disciplinaNome: item.disciplinaNome,
             disciplinaIdx: item.disciplinaIdx,
@@ -1772,6 +1868,7 @@ async function processGuiaMentoradoIncidenciaDay(
           const mapped = pctBase + Math.round(((p || 0) / 100) * Math.max(8, Math.round(80 / items.length)))
           await updateProgress(Math.min(mapped, 92), msg || label)
         },
+        { jobId },
       )
       if (result?.parsed) done += 1
     } catch (err) {
@@ -1880,7 +1977,7 @@ export async function processLocalGenerationJob({
       )
     }
     case 'conteudo_incidencia': {
-      return processConteudoIncidencia(courseId, serverPayload, updateProgress)
+      return processConteudoIncidencia(courseId, serverPayload, updateProgress, { jobId })
     }
     case 'questoes_incidencia': {
       const nivel = serverPayload.savePlan?.nivel ?? 1
