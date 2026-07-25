@@ -80,6 +80,22 @@ export function formatAiErrorForUser(error) {
 
   const code = String(error?.code || '')
   const msg = String(error?.message || '').trim()
+  const lower = msg.toLowerCase()
+
+  if (
+    code === 'gemini_api_key_expired' ||
+    lower.includes('api key expired') ||
+    lower.includes('api key not valid') ||
+    lower.includes('api_key_invalid') ||
+    lower.includes('invalid api key') ||
+    (lower.includes('expired') && lower.includes('api key'))
+  ) {
+    return (
+      'Chave da API Gemini expirada ou inválida. Gere uma nova em https://aistudio.google.com/apikey, ' +
+      'atualize GEMINI_API_KEY no Vercel (Settings → Environment Variables) e faça Redeploy. ' +
+      'O checkpoint não perde o que já foi salvo — clique Gerar de novo.'
+    )
+  }
 
   // Erros de negócio / bot (já em português) — não mascarar
   if (
