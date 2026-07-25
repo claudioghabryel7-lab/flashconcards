@@ -70,19 +70,19 @@ import {
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  // Grounding só na geração; verificação pós não paga grounding de novo (geminiApi).
+  // Grounding só na geração — verify extra dobrava custo sem ganho claro.
   useGoogleSearch: true,
-  verifyContent: true,
+  verifyContent: false,
   forceAudit: false,
   // low: qualidade jurídica sem thinking medium/high (caro como output)
   thinkingLevel: 'low',
 }
 
 /** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
-const TOPIC_AUTO_RETRIES = 3
-const TOPIC_RETRY_DELAY_MS = 2500
+const TOPIC_AUTO_RETRIES = 2
+const TOPIC_RETRY_DELAY_MS = 4000
 /** Varredura final nos que falharam com erro temporário. */
-const DAY_SWEEP_RETRIES = 2
+const DAY_SWEEP_RETRIES = 1
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -92,6 +92,17 @@ function sleep(ms) {
 function isTransientGenerationError(err) {
   const code = String(err?.code || '')
   const msg = String(err?.message || err || '').toLowerCase()
+  // NUNCA retry automático em cota/429 — queima créditos de novo
+  if (
+    code === 'quota_exceeded' ||
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('rate limit') ||
+    msg.includes('too many requests')
+  ) {
+    return false
+  }
   // legal_audit_failed NÃO é transitório — regenerar queima cota sem resolver interpretação
   return (
     code === 'ai_empty_response' ||
@@ -110,9 +121,6 @@ function isTransientGenerationError(err) {
     msg.includes('timed out') ||
     msg.includes('network') ||
     msg.includes('fetch') ||
-    msg.includes('429') ||
-    msg.includes('quota') ||
-    msg.includes('resource_exhausted') ||
     msg.includes('overloaded') ||
     msg.includes('unavailable')
   )

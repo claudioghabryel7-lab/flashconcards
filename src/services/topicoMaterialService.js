@@ -114,11 +114,12 @@ export async function ensureMaterialForTopico({
     courseId: resolvedId,
     trustedGeneration: true,
     useGoogleSearch: true,
-    verifyContent: true,
+    // Grounding na geração já valida fatos — 2ª chamada verify com Search era vazamento
+    verifyContent: false,
     isLegalContent: isLegal,
     useRAG: false,
     thinkingLevel: 'low',
-    maxContinues: 4,
+    maxContinues: 3,
     courseContext,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
   })

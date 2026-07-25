@@ -6887,8 +6887,11 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       const response = await callGeminiWithRetry(prompt, {
         courseId: selectedCourseForFlashcards || 'alego-default',
+        useGoogleSearch: false,
+        verifyContent: false,
+        thinkingLevel: 'minimal',
         generationConfig: {
-          maxOutputTokens: 32000,
+          maxOutputTokens: 1024,
           temperature: 0.35,
         },
       })

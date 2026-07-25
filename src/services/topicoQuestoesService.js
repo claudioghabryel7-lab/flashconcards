@@ -119,8 +119,8 @@ FORMATO JSON (apenas JSON válido):
     const parsed = await generateAiJson(prompt, {
       courseId,
       trustedGeneration: true,
-      useGoogleSearch: true,
-      // Grounding já ativo → geminiApi ignora RAG (evita custo duplo)
+      // Grounding só nos 2 primeiros lotes — demais reutilizam o mesmo tópico (economia)
+      useGoogleSearch: batchNumber <= 2,
       useRAG: false,
       thinkingLevel: 'low',
       maxContinues: 2,
@@ -138,13 +138,17 @@ FORMATO JSON (apenas JSON válido):
   }
 
   const totalBatches = 10
-  const batchPromises = []
-  for (let i = 1; i <= totalBatches; i++) {
-    batchPromises.push(generateBatch(i, totalBatches))
+  // Concorrência 2 (antes: 10 em paralelo → pico de cota + retries caros)
+  const CONCURRENCY = 2
+  console.log(`🚀 Gerando ${totalBatches} lotes (${tipoLabel}), concorrência ${CONCURRENCY}...`)
+  const allBatches = []
+  for (let start = 1; start <= totalBatches; start += CONCURRENCY) {
+    const slice = []
+    for (let i = start; i < start + CONCURRENCY && i <= totalBatches; i += 1) {
+      slice.push(generateBatch(i, totalBatches))
+    }
+    allBatches.push(...(await Promise.all(slice)))
   }
-
-  console.log(`🚀 Gerando ${totalBatches} lotes no formato ${tipoLabel}...`)
-  const allBatches = await Promise.all(batchPromises)
   const allQuestoes = allBatches.flat()
   console.log(`✅ Total de ${allQuestoes.length} questões para o tópico "${topicKey}"`)
 

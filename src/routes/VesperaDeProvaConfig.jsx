@@ -435,9 +435,12 @@ REGRAS:
       // Usar callGeminiWithRetry que já tem teste silencioso de API keys
       const response = await callGeminiWithRetry(prompt, {
         courseId,
+        thinkingLevel: 'low',
+        verifyContent: false,
         generationConfig: {
           temperature: 0.35,
-          maxOutputTokens: 65536,
+          // 32k basta; 65k dobrava teto de output sem ganho claro
+          maxOutputTokens: 32000,
         },
         useGoogleSearch: true,
       })

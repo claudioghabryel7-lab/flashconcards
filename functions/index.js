@@ -1323,8 +1323,9 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-3.6-flash',
         generationConfig: {
-          maxOutputTokens: 8000,
+          maxOutputTokens: 4000,
           temperature: 0.7,
+          thinkingConfig: { thinkingLevel: 'minimal' },
         }
       })
 
@@ -1505,8 +1506,9 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-3.6-flash',
         generationConfig: {
-          maxOutputTokens: 8000,
+          maxOutputTokens: 4000,
           temperature: 0.7,
+          thinkingConfig: { thinkingLevel: 'minimal' },
         }
       })
 
@@ -1720,8 +1722,9 @@ exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-3.6-flash',
         generationConfig: {
-          maxOutputTokens: 8000,
+          maxOutputTokens: 4000,
           temperature: 0.7,
+          thinkingConfig: { thinkingLevel: 'minimal' },
         }
       })
 

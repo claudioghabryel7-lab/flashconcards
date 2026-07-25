@@ -18,6 +18,11 @@ import { PaperAirplaneIcon } from '@heroicons/react/24/solid'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import {
+  getPreferredChatModel,
+  rememberChatModel,
+  listChatModelFallbacks,
+} from '../utils/geminiModelPick'
 
 const MATERIAS = [
   'Português',
@@ -177,93 +182,23 @@ const AIChat = () => {
   }, [user, profile])
 
   // Descobrir qual modelo está disponível
+  // Modelo de chat sem probe pago
   useEffect(() => {
-    const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey || availableModel) return
-
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          throw new Error('Não foi possível listar modelos')
-        }
-
-        const data = await response.json()
-        const models = data.models || []
-        
-        const preferred = [
-          'gemini-3.5-flash-lite',
-          'gemini-3.6-flash',
-          'gemini-3.5-flash',
-          'gemini-flash-latest',
-        ]
-        const generateModels = models
-          .filter((model) => {
-            const methods = model.supportedGenerationMethods || []
-            return methods.includes('generateContent')
-          })
-          .sort((a, b) => {
-            const an = a.name.replace('models/', '')
-            const bn = b.name.replace('models/', '')
-            const ai = preferred.indexOf(an)
-            const bi = preferred.indexOf(bn)
-            if (ai === -1 && bi === -1) return 0
-            if (ai === -1) return 1
-            if (bi === -1) return -1
-            return ai - bi
-          })
-
-        if (generateModels.length === 0) {
-          setModelError('Nenhum modelo de geração disponível. Verifique sua API key.')
-          return
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const modelName = generateModels[0].name.replace('models/', '')
-        
-        try {
-          const model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({
-            contents: [{ parts: [{ text: 'ok' }] }],
-            generationConfig: {
-              maxOutputTokens: 1,
-              thinkingConfig: { thinkingLevel: 'minimal' },
-            },
-          })
-          setAvailableModel(modelName)
-        } catch (testErr) {
-          for (let i = 1; i < generateModels.length; i++) {
-            try {
-              const testModelName = generateModels[i].name.replace('models/', '')
-              // Pular Pro no chat (thinking caro)
-              if (/pro/i.test(testModelName)) continue
-              const testModel = genAI.getGenerativeModel({ model: testModelName })
-              await testModel.generateContent({
-                contents: [{ parts: [{ text: 'ok' }] }],
-                generationConfig: {
-                  maxOutputTokens: 1,
-                  thinkingConfig: { thinkingLevel: 'minimal' },
-                },
-              })
-              setAvailableModel(testModelName)
-              return
-            } catch (err) {
-              continue
-            }
-          }
-          setModelError('Nenhum modelo funcionou. Verifique sua API key e permissões.')
-        }
-      } catch (err) {
-        console.error('Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API. Verifique sua API key.')
-      }
+    if (availableModel) return
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
+    if (!apiKey) {
+      setModelError('API key do Gemini não configurada.')
+      return
     }
-
-    findAvailableModel()
+    const model = getPreferredChatModel() || listChatModelFallbacks()[0]
+    if (!model) {
+      setModelError('Nenhum modelo de chat configurado')
+      return
+    }
+    setAvailableModel(model)
+    rememberChatModel(model)
   }, [availableModel])
+
 
   // Chamar Groq API como fallback
   const callGroqAPI = async (prompt) => {

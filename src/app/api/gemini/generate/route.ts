@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readEnv } from '@/lib/env.js'
 import { getDefaultGeminiModels, withCostSafeThinking } from '@/utils/geminiModels.js'
+import { checkApiRateLimit, clientKeyFromRequest } from '@/lib/apiRateLimit'
 
 const DEFAULT_MODELS = getDefaultGeminiModels()
 
@@ -10,6 +11,17 @@ function getServerApiKey(): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkApiRateLimit(`gemini:${clientKeyFromRequest(request)}`, {
+      limit: 30,
+      windowMs: 60_000,
+    })
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Limite de requisições. Tente em ${rl.retryAfterSec}s.` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      )
+    }
+
     const body = await request.json()
     const {
       prompt,
@@ -29,6 +41,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Prompt é obrigatório' }, { status: 400 })
     }
 
+    // Cap de prompt: evita payload abusivo / contexto gigante
+    if (prompt.length > 200_000) {
+      return NextResponse.json({ error: 'Prompt excessivamente longo' }, { status: 413 })
+    }
+
+    // Cliente não pode forçar Pro via body (thinking caro)
+    const safeModels = (Array.isArray(models) ? models : DEFAULT_MODELS)
+      .map(String)
+      .filter((m) => m && !/pro/i.test(m))
+    const modelList = safeModels.length ? safeModels : DEFAULT_MODELS
+
     const apiKey = getServerApiKey()
     if (!apiKey) {
       return NextResponse.json(
@@ -41,7 +64,6 @@ export async function POST(request: NextRequest) {
     }
 
     let lastError = 'Erro desconhecido'
-    const modelList: string[] = Array.isArray(models) && models.length ? models : DEFAULT_MODELS
 
     for (const model of modelList) {
       const safeConfig = withCostSafeThinking(generationConfig, model, thinkingLevel)

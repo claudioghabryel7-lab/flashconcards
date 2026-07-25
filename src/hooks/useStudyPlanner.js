@@ -260,8 +260,12 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
       const recommendation = await generateAiJson(prompt, {
         courseId: courseId || 'alego-default',
+        useGoogleSearch: false,
+        useRAG: false,
+        verifyContent: false,
+        thinkingLevel: 'minimal',
         generationConfig: {
-          maxOutputTokens: 8000,
+          maxOutputTokens: 3000,
           temperature: 0.35,
         },
       })

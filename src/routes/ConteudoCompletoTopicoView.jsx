@@ -667,9 +667,10 @@ REGRAS FINAIS:
         useRAG: false,
         trustedGeneration: true,
         useGoogleSearch: true,
-        verifyContent: true,
+        // Grounding na geração; verify extra = 2ª chamada cara
+        verifyContent: false,
         thinkingLevel: 'low',
-        maxContinues: 4,
+        maxContinues: 3,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       }
       let parsed = await generateAiJson(prompt, genOpts)

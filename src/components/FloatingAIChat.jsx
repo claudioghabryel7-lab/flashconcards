@@ -26,6 +26,11 @@ import {
   getOrCreateGeminiContextCache,
   generateWithCachedContext,
 } from '../utils/geminiContextCache'
+import {
+  getPreferredChatModel,
+  rememberChatModel,
+  listChatModelFallbacks,
+} from '../utils/geminiModelPick'
 
 const MATERIAS = [
   'Português',
@@ -47,7 +52,7 @@ const FloatingAIChat = () => {
   const [sending, setSending] = useState(false)
   const [availableModel, setAvailableModel] = useState(null)
   const [modelError, setModelError] = useState(null)
-  const [initialMessageSent, setInitialMessageSent] = useState(false)
+  const [initialMessageSent, setInitialMessageSent] = useState(true)
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const [quotaCooldown, setQuotaCooldown] = useState(0) // Tempo restante de cooldown por quota
   const [quotaDailyLimit, setQuotaDailyLimit] = useState(false) // Limite diário atingido
@@ -288,150 +293,28 @@ const FloatingAIChat = () => {
     return () => unsub()
   }, [user, isOpen])
 
-  // Descobrir modelo disponível (executar apenas uma vez)
+  // Modelo de chat: allowlist + sessionStorage — SEM probe generateContent
   useEffect(() => {
-    if (availableModel) return // Já tem modelo, não precisa procurar novamente
-    
-    const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        console.warn('⚠️ VITE_GEMINI_API_KEY não configurada')
-        setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
-        return
-      }
-
-      console.log('🔍 Procurando modelo disponível...')
-      
-      // Chat: Flash-Lite/Flash apenas — sem Pro (thinking caro)
-      const knownModels = [
-        'gemini-3.5-flash-lite',
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-flash-latest',
-      ]
-      const genAI = new GoogleGenerativeAI(apiKey)
-      
-      for (const modelName of knownModels) {
-        try {
-          console.log(`🧪 Testando modelo: ${modelName}`)
-          const model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({
-            contents: [{ parts: [{ text: 'ok' }] }],
-            generationConfig: {
-              maxOutputTokens: 1,
-              thinkingConfig: { thinkingLevel: 'minimal' },
-            },
-          })
-          console.log(`✅ Modelo encontrado: ${modelName}`)
-          setAvailableModel(modelName)
-          return
-        } catch (err) {
-          console.log(`❌ Modelo ${modelName} não disponível:`, err.message)
-          continue
-        }
-      }
-      
-      // Se nenhum modelo conhecido funcionou, tentar listar da API
-      console.log('🔍 Listando modelos da API...')
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          console.error('❌ Erro ao listar modelos:', response.status)
-          setModelError('Erro ao conectar com a API do Gemini')
-          return
-        }
-
-        const data = await response.json()
-        const models = data.models || []
-        const generateModels = models.filter((model) => {
-          return (model.supportedGenerationMethods || []).includes('generateContent')
-        })
-
-        if (generateModels.length === 0) {
-          console.warn('⚠️ Nenhum modelo com generateContent encontrado')
-          setModelError('Nenhum modelo disponível')
-          return
-        }
-
-        // Tentar cada modelo da lista
-        for (const modelData of generateModels) {
-          try {
-            const testModelName = modelData.name.replace('models/', '')
-            const testModel = genAI.getGenerativeModel({ model: testModelName })
-            await testModel.generateContent({
-              contents: [{ parts: [{ text: 'test' }] }],
-            })
-            console.log(`✅ Modelo encontrado: ${testModelName}`)
-            setAvailableModel(testModelName)
-            return
-          } catch {
-            continue
-          }
-        }
-        
-        console.warn('⚠️ Nenhum modelo funcionou')
-        setModelError('Nenhum modelo disponível funcionou')
-      } catch (err) {
-        console.error('❌ Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API do Gemini. Verifique sua conexão e API key.')
-      }
-    }
-
-    findAvailableModel()
-  }, []) // Array vazio - executar apenas uma vez
-
-  // Gerar análise inicial quando abrir o chat (apenas uma vez)
-  useEffect(() => {
-    if (!isOpen || !user) return
-    
-    // Se já tem mensagens, não enviar análise inicial novamente
-    if (messages.length > 0) {
-      setInitialMessageSent(true)
+    if (availableModel) return
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
+    if (!apiKey) {
+      setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
       return
     }
-    
-    // Se já enviou, não enviar novamente
-    if (initialMessageSent) return
-    
-    // Aguardar modelo estar disponível
-    if (!availableModel) {
-      console.log('⏳ Aguardando modelo estar disponível...')
+    const model = getPreferredChatModel() || listChatModelFallbacks()[0]
+    if (!model) {
+      setModelError('Nenhum modelo de chat configurado')
       return
     }
+    console.log('✅ Modelo de chat (sem probe):', model)
+    setAvailableModel(model)
+    rememberChatModel(model)
+  }, [availableModel])
 
-    console.log('✅ Preparando análise inicial...', {
-      totalDays: studyStats.totalDays,
-      cardProgressKeys: Object.keys(cardProgress).length,
-      allCardsLength: allCards.length
-    })
-
-    const generateInitialAnalysis = async () => {
-      try {
-        console.log('🚀 Gerando análise inicial...')
-        setInitialMessageSent(true)
-        const analysis = await analyzeProgress()
-        console.log('📊 Análise gerada, tamanho:', analysis.length, 'caracteres')
-        console.log('📤 Enviando análise para IA...')
-        await sendAIMessage(analysis, true)
-        console.log('✅ Análise enviada com sucesso!')
-      } catch (err) {
-        console.error('❌ Erro ao gerar análise inicial:', err)
-        setInitialMessageSent(false) // Permitir tentar novamente
-      }
-    }
-
-    // Aguardar um pouco para garantir que os dados estão carregados
-    const timer = setTimeout(() => {
-      if (messages.length === 0 && !initialMessageSent && availableModel) {
-        generateInitialAnalysis()
-      }
-    }, 2000)
-
-    return () => clearTimeout(timer)
-  }, [isOpen, user, availableModel, initialMessageSent, messages.length])
+  // Sem análise automática ao abrir (1 chamada cara por open). Libera input imediatamente.
+  useEffect(() => {
+    setInitialMessageSent(true)
+  }, [])
 
   // Analisar progresso e gerar texto
   const analyzeProgress = async () => {
@@ -1205,7 +1088,7 @@ O chat estará disponível novamente amanhã ou após configurar um plano pago.`
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={quotaDailyLimit ? "Limite diário atingido. Tente amanhã." : (initialMessageSent ? "Pergunte ao seu mentor..." : "Aguardando análise...")}
+                placeholder={quotaDailyLimit ? "Limite diário atingido. Tente amanhã." : "Pergunte ao seu mentor..."}
                 disabled={sending || !availableModel || !initialMessageSent || quotaDailyLimit || quotaCooldown > 0}
                 className={`flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none disabled:opacity-50 ${
                   darkMode

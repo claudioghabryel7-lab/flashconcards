@@ -931,8 +931,9 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-3.6-flash',
         generationConfig: {
-          maxOutputTokens: 8192, // Reduzido para mais velocidade
+          maxOutputTokens: 8192,
           temperature: 0.7,
+          thinkingConfig: { thinkingLevel: 'low' },
         }
       })
 
