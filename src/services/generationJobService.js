@@ -200,10 +200,15 @@ export async function createGenerationJob({
 
 export async function updateGenerationJob(userId, jobId, patch) {
   if (!userId || !jobId || !db) return
-  await updateDoc(doc(db, 'users', userId, 'generationJobs', jobId), {
+  const next = {
     ...patch,
     updatedAt: serverTimestamp(),
-  })
+  }
+  // Heartbeat de progresso — banner / stale reconcile usam isso
+  if (patch.progress != null || patch.message != null || patch.status != null) {
+    next.progressUpdatedAt = serverTimestamp()
+  }
+  await updateDoc(doc(db, 'users', userId, 'generationJobs', jobId), next)
 }
 
 const STALE_JOB_MS = 45 * 60 * 1000
@@ -566,12 +571,14 @@ export async function forceStopAllGenerationJobsGlobally() {
 export function subscribeActiveGenerationJobs(userId, onData, onError) {
   if (!userId || !db) return () => {}
 
+  // Inclui ERROR recente para o banner mostrar a falha (antes sumia sem status)
   const q = query(
     jobsRef(userId),
     where('status', 'in', [
       GENERATION_JOB_STATUS.PENDING,
       GENERATION_JOB_STATUS.RUNNING,
       GENERATION_JOB_STATUS.PAUSED,
+      GENERATION_JOB_STATUS.ERROR,
       ...GENERATION_WAITING_STATUSES,
     ]),
   )
@@ -579,7 +586,20 @@ export function subscribeActiveGenerationJobs(userId, onData, onError) {
   return onSnapshot(
     q,
     (snap) => {
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      const now = Date.now()
+      const ERROR_VISIBLE_MS = 5 * 60 * 1000
+      const rows = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((job) => {
+          if (job.status !== GENERATION_JOB_STATUS.ERROR) return true
+          const ts =
+            job.updatedAt?.toDate?.() ||
+            job.progressUpdatedAt?.toDate?.() ||
+            job.finishedAt?.toDate?.() ||
+            null
+          if (!ts) return true
+          return now - ts.getTime() <= ERROR_VISIBLE_MS
+        })
       onData(rows)
     },
     (err) => {

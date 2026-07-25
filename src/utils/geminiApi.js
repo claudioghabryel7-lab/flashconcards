@@ -20,6 +20,21 @@ import {
   getDefaultGeminiModels,
   VERIFY_GEMINI_MODELS,
 } from './geminiModels.js'
+import {
+  collectGeminiTextParts,
+  getGeminiFinishReason,
+  hasUsableGeminiText,
+  wasGeminiTruncated,
+  withLiteThinkingConfig,
+} from './geminiResponseUtils.js'
+
+export {
+  collectGeminiTextParts,
+  getGeminiFinishReason,
+  hasUsableGeminiText,
+  wasGeminiTruncated,
+  withLiteThinkingConfig,
+} from './geminiResponseUtils.js'
 
 const MODELS = getDefaultGeminiModels()
 const VERIFY_MODELS = VERIFY_GEMINI_MODELS
@@ -383,7 +398,7 @@ async function executeGeminiRequest(prompt, options = {}) {
     try {
       const requestBody = {
         contents: [{ parts: [{ text: finalPrompt }] }],
-        generationConfig,
+        generationConfig: withLiteThinkingConfig(generationConfig, model),
       }
 
       // Adicionar Google Search Grounding se solicitado
@@ -415,6 +430,33 @@ async function executeGeminiRequest(prompt, options = {}) {
       if (!response.ok) {
         const errorMessage = data.error?.message || 'Erro na API da IA'
 
+        // thinkingConfig inválido em algum modelo → tenta de novo sem ele
+        if (
+          response.status === 400 &&
+          /thinking/i.test(errorMessage) &&
+          requestBody.generationConfig?.thinkingConfig
+        ) {
+          if (!silent) console.log(`⚠️ ${model}: thinkingConfig rejeitado — retry sem thinking`)
+          const retryBody = {
+            ...requestBody,
+            generationConfig: { ...(generationConfig || {}) },
+          }
+          delete retryBody.generationConfig.thinkingConfig
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(retryBody),
+            },
+          )
+          const retryData = await retryRes.json()
+          if (retryRes.ok && hasUsableGeminiText(retryData)) {
+            if (!silent) console.log(`✅ Sucesso com modelo ${model} (sem thinkingConfig)`)
+            return retryData
+          }
+        }
+
         // Se for erro 429/503 (quota/alta demanda) ou 404 (modelo indisponível), tentar próximo
         if (response.status === 429 || response.status === 503 || response.status === 404) {
           if (!silent) console.log(`⚠️ Modelo ${model} com erro (${response.status}), tentando próximo...`)
@@ -426,6 +468,17 @@ async function executeGeminiRequest(prompt, options = {}) {
         const err = new Error(errorMessage)
         if (response.status === 429) err.code = 'quota_exceeded'
         throw err
+      }
+
+      // HTTP 200 mas sem texto (Lite esgotou em thinking / só thought) → próximo modelo
+      if (!hasUsableGeminiText(data)) {
+        const reason = getGeminiFinishReason(data) || 'EMPTY'
+        if (!silent) {
+          console.log(`⚠️ Modelo ${model} sem texto útil (finishReason=${reason}), tentando próximo…`)
+        }
+        lastError = new Error(`A IA não retornou texto (finishReason=${reason}).`)
+        lastError.code = 'ai_empty_response'
+        continue
       }
 
       if (!silent) console.log(`✅ Sucesso com modelo ${model}`)
@@ -467,25 +520,22 @@ async function executeGeminiRequest(prompt, options = {}) {
  * @returns {string} - Texto gerado
  */
 export function extractGeneratedText(response) {
-  const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  
-  if (!generatedText || typeof generatedText !== 'string' || !generatedText.trim()) {
-    const err = new Error('A IA não retornou texto')
+  const generatedText = collectGeminiTextParts(response)
+
+  if (!generatedText) {
+    const reason = getGeminiFinishReason(response) || 'UNKNOWN'
+    const blocked = response?.promptFeedback?.blockReason || response?.promptFeedback?.block_reason
+    const err = new Error(
+      blocked
+        ? `A IA bloqueou a resposta (${blocked}).`
+        : `A IA não retornou texto (finishReason=${reason}).`,
+    )
     err.code = 'ai_empty_response'
+    err.finishReason = reason
     throw err
   }
 
-  return generatedText.trim()
-}
-
-/** Motivo de parada do Gemini (ex.: MAX_TOKENS = texto cortado). */
-export function getGeminiFinishReason(response) {
-  return String(response?.candidates?.[0]?.finishReason || response?.candidates?.[0]?.finish_reason || '')
-}
-
-export function wasGeminiTruncated(response) {
-  const reason = getGeminiFinishReason(response).toUpperCase()
-  return reason === 'MAX_TOKENS' || reason === 'LENGTH'
+  return generatedText
 }
 
 /** True se há pelo menos uma chave Gemini configurada no ambiente. */

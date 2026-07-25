@@ -62,6 +62,10 @@ function isPausedStatus(status) {
   return status === GENERATION_JOB_STATUS.PAUSED
 }
 
+function isErrorStatus(status) {
+  return status === GENERATION_JOB_STATUS.ERROR
+}
+
 function jobAgeSeconds(job, now = Date.now()) {
   const created = job.createdAt?.toDate?.()
   if (!created) return null
@@ -69,6 +73,9 @@ function jobAgeSeconds(job, now = Date.now()) {
 }
 
 function formatJobMessage(job) {
+  if (isErrorStatus(job.status)) {
+    return job.message || 'Falha na geração'
+  }
   if (isPausedStatus(job.status)) {
     return job.message || 'Pausado — checkpoint salvo'
   }
@@ -87,6 +94,9 @@ function formatJobMessage(job) {
 }
 
 function formatJobHint(job, now = Date.now()) {
+  if (isErrorStatus(job.status)) {
+    return 'Erro visível por alguns minutos. Corrija e clique Gerar de novo — o checkpoint evita regastar o que já salvou.'
+  }
   if (isPausedStatus(job.status)) {
     return 'Checkpoint salvo. Continuar retoma de onde parou (sem regastar o que já gerou).'
   }
@@ -342,26 +352,31 @@ export default function BackgroundGenerationBanner() {
         const waiting = isWaitingStatus(job.status)
         const pending = isPendingStatus(job.status)
         const paused = isPausedStatus(job.status)
+        const errored = isErrorStatus(job.status)
         const waitingTimeout = job.status === GENERATION_JOB_STATUS.WAITING_TIMEOUT
         const stuckPending = pending && (jobAgeSeconds(job, nowTick) ?? 0) >= 90
-        const canPause = job.status === GENERATION_JOB_STATUS.RUNNING || pending
+        const canPause = !errored && (job.status === GENERATION_JOB_STATUS.RUNNING || pending)
 
         return (
           <div
             key={job.id}
             className={`rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm ${
-              paused
-                ? 'border-violet-500/40 bg-violet-500/10'
-                : waiting || stuckPending
-                  ? 'border-amber-500/40 bg-amber-500/10'
-                  : pending
-                    ? 'border-sky-500/30 bg-sky-500/5'
-                    : 'border-cp-accent/30 bg-cp-surface/95'
+              errored
+                ? 'border-red-500/40 bg-red-500/10'
+                : paused
+                  ? 'border-violet-500/40 bg-violet-500/10'
+                  : waiting || stuckPending
+                    ? 'border-amber-500/40 bg-amber-500/10'
+                    : pending
+                      ? 'border-sky-500/30 bg-sky-500/5'
+                      : 'border-cp-accent/30 bg-cp-surface/95'
             }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
-                {paused ? (
+                {errored ? (
+                  <XMarkIcon className="h-4 w-4 text-red-600" />
+                ) : paused ? (
                   <PauseIcon className="h-4 w-4 text-violet-600" />
                 ) : waiting ? (
                   waitingTimeout ? (
@@ -376,6 +391,7 @@ export default function BackgroundGenerationBanner() {
                 )}
                 <p className="text-sm font-medium text-cp-text">
                   {JOB_LABELS[job.jobType] || 'Geração com IA'}
+                  {errored ? ' — erro' : ''}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
@@ -408,8 +424,8 @@ export default function BackgroundGenerationBanner() {
                   onClick={() => handleDismiss(job.id)}
                   disabled={dismissing[job.id]}
                   className="rounded-lg p-1 text-cp-muted transition hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
-                  title="Parar / cancelar esta tarefa"
-                  aria-label="Parar esta tarefa"
+                  title={errored ? 'Dispensar' : 'Parar / cancelar esta tarefa'}
+                  aria-label={errored ? 'Dispensar erro' : 'Parar esta tarefa'}
                 >
                   <XMarkIcon className="h-4 w-4" />
                 </button>
@@ -417,17 +433,24 @@ export default function BackgroundGenerationBanner() {
             </div>
             <p
               className={`mt-1 text-xs ${
-                paused
-                  ? 'text-violet-800 dark:text-violet-200'
-                  : waiting || stuckPending
-                    ? 'text-amber-800 dark:text-amber-200'
-                    : pending
-                      ? 'text-sky-800 dark:text-sky-200'
-                      : 'text-cp-muted'
+                errored
+                  ? 'text-red-700 dark:text-red-200'
+                  : paused
+                    ? 'text-violet-800 dark:text-violet-200'
+                    : waiting || stuckPending
+                      ? 'text-amber-800 dark:text-amber-200'
+                      : pending
+                        ? 'text-sky-800 dark:text-sky-200'
+                        : 'text-cp-muted'
               }`}
             >
               {formatJobMessage(job)}
-              {!waiting && !pending && !paused && typeof job.progress === 'number' && job.progress > 0
+              {!errored &&
+              !waiting &&
+              !pending &&
+              !paused &&
+              typeof job.progress === 'number' &&
+              job.progress > 0
                 ? ` (${job.progress}%)`
                 : ''}
               {paused && typeof job.progress === 'number' && job.progress > 0

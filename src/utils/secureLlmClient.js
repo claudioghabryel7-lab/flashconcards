@@ -74,9 +74,14 @@ export async function googleSearchProxy(query, numResults = 5) {
   return authFetch('/api/google-search', { query, numResults })
 }
 
-/** Texto gerado a partir da resposta Gemini (REST). */
+/** Texto gerado a partir da resposta Gemini (REST) — ignora parts de thought. */
 export function extractGeminiProxyText(data) {
   const parts = data?.candidates?.[0]?.content?.parts
   if (!Array.isArray(parts)) return ''
-  return parts.map((p) => p?.text || '').join('')
+  const useful = parts
+    .filter((p) => p?.text && !p.thought)
+    .map((p) => String(p.text))
+  if (useful.length) return useful.join('\n').trim()
+  // Fallback se só veio thought
+  return parts.map((p) => p?.text || '').join('').trim()
 }

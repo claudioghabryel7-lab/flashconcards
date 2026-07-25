@@ -366,7 +366,7 @@ const GuiaMentorado = () => {
     }
 
     const confirmed = window.confirm(
-      'Gerar os conteúdos faltantes deste curso (do 1º dia do cronograma até hoje)?\n\nUm único job na nuvem processa dia a dia com retomada automática. Acompanhe no banner.',
+      'Gerar os conteúdos faltantes deste curso (do 1º dia do cronograma até hoje)?\n\nA geração roda nesta aba (local) com checkpoint — pode pausar e continuar. Acompanhe o status no banner.',
     )
     if (!confirmed) return
 

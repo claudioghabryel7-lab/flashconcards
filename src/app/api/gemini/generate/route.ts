@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireApiAuth } from '@/lib/apiAuth'
 import { getGeminiApiKey } from '@/lib/serverSecrets'
 import { getDefaultGeminiModels } from '@/utils/geminiModels.js'
+import {
+  hasUsableGeminiText,
+  withLiteThinkingConfig,
+  getGeminiFinishReason,
+} from '@/utils/geminiResponseUtils.js'
 
 const DEFAULT_MODELS = getDefaultGeminiModels()
 
@@ -39,31 +44,53 @@ export async function POST(request: NextRequest) {
     const modelList = Array.isArray(models) && models.length ? models : DEFAULT_MODELS
 
     for (const model of modelList) {
-      const requestBody: Record<string, unknown> = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig,
+      const tryOnce = async (genConfig: Record<string, unknown>) => {
+        const requestBody: Record<string, unknown> = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: genConfig,
+        }
+
+        if (useGoogleSearch) {
+          requestBody.tools = [{ googleSearch: {} }]
+        }
+        if (useFunctionCalling && Array.isArray(tools) && tools.length > 0) {
+          requestBody.tools = [...((requestBody.tools as unknown[]) || []), ...tools]
+        }
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          },
+        )
+        const data = await response.json()
+        return { response, data }
       }
 
-      if (useGoogleSearch) {
-        requestBody.tools = [{ googleSearch: {} }]
-      }
-      if (useFunctionCalling && Array.isArray(tools) && tools.length > 0) {
-        requestBody.tools = [...((requestBody.tools as unknown[]) || []), ...tools]
-      }
+      let genConfig = withLiteThinkingConfig(generationConfig, model) as Record<string, unknown>
+      let { response, data } = await tryOnce(genConfig)
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        },
-      )
-
-      const data = await response.json()
+      // thinkingConfig rejeitado → retry sem ele
+      if (
+        !response.ok &&
+        response.status === 400 &&
+        /thinking/i.test(String(data.error?.message || '')) &&
+        genConfig.thinkingConfig
+      ) {
+        genConfig = { ...(generationConfig || {}) }
+        delete genConfig.thinkingConfig
+        ;({ response, data } = await tryOnce(genConfig))
+      }
 
       if (response.ok) {
-        return NextResponse.json(data)
+        if (hasUsableGeminiText(data)) {
+          return NextResponse.json(data)
+        }
+        // 200 vazio → tenta próximo modelo (Lite → Flash)
+        lastError = `A IA não retornou texto (finishReason=${getGeminiFinishReason(data) || 'EMPTY'})`
+        continue
       }
 
       lastError = data.error?.message || `HTTP ${response.status}`
@@ -72,7 +99,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ error: lastError }, { status: 502 })
+    return NextResponse.json({ error: lastError, code: 'ai_empty_response' }, { status: 502 })
   } catch (error) {
     console.error('[api/gemini/generate]', error)
     return NextResponse.json(
