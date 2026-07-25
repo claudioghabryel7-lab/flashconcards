@@ -957,7 +957,7 @@ async function processSingleMentoradoTopic({
       appendGoogleAiDossier(topic.conteudoPrompt, googleAiDossier),
       {
         courseId,
-        maxContinues: 8,
+        maxContinues: 5,
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
           verifyContent: true,

@@ -521,7 +521,7 @@ export function hasGeminiApiKeys() {
 export async function generateAiJson(prompt, options = {}) {
   const contentType = String(options.contentType || options?.savePlan?.contentType || '').toLowerCase()
   const isMaterial = contentType === 'material' || contentType === 'conteudo_completo'
-  const maxContinues = options.maxContinues ?? (isMaterial ? 8 : 5)
+  const maxContinues = options.maxContinues ?? (isMaterial ? 5 : 3)
   const {
     maxContinues: _mc,
     rejectTruncated = true,
