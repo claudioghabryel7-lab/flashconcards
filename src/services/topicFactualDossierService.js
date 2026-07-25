@@ -5,7 +5,7 @@
 
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { normalizeTopicKeyForStorage } from '../utils/topicKeyNormalize'
+import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { modoIaCacheKey } from './googleAiWebDossierService'
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000
