@@ -175,12 +175,21 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
   const { verifyContent: verifyOverride, ...rest } = extra
   const defaultVerify =
     rest.contentType === 'material' || (rest.contentType === 'flashcards' && isLegal)
+  const purposeFromType =
+    rest.contentType === 'material'
+      ? 'material'
+      : rest.contentType === 'flashcards'
+        ? 'flashcards'
+        : rest.contentType === 'questoes'
+          ? 'questoes'
+          : 'content'
   return {
     ...TRUSTED_AI,
     forceAudit: false,
     useGoogleSearch: true,
     useRAG: false,
     disciplina,
+    purpose: purposeFromType,
     ...rest,
     isLegalContent: isLegal,
     // Material (e flashcards jurídicos): auditoria pós-geração. Questões: off (JSON + filtro).
@@ -881,9 +890,7 @@ async function processSingleMentoradoTopic({
   })
   await updateProgress(
     pctBase,
-    richTopicDossier
-      ? `Tópico ${index + 1}/${total}: ${label} — material (dossiê)`
-      : `Tópico ${index + 1}/${total}: ${label} — material (Search)`,
+    `Tópico ${index + 1}/${total}: ${label} — material (Search + dossiê)`,
   )
 
   const matPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
@@ -898,7 +905,8 @@ async function processSingleMentoradoTopic({
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
           verifyContent: true,
-          useGoogleSearch: !richTopicDossier,
+          // Material: SEMPRE Search (1x) — qualidade igual ao início
+          useGoogleSearch: true,
           courseContext,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
         }),
@@ -931,8 +939,10 @@ async function processSingleMentoradoTopic({
         courseId,
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
+          purpose: 'material_deepen',
           verifyContent: false,
-          useGoogleSearch: !richTopicDossier,
+          // Aprofundamento sem Search extra
+          useGoogleSearch: false,
           courseContext,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
         }),

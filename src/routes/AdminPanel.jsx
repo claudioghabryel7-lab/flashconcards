@@ -41,6 +41,7 @@ import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
 import AdminPaymentChatbotConfig from '../components/AdminPaymentChatbotConfig'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
+import AdminAiUsageCosts from '../components/admin/AdminAiUsageCosts'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -1914,15 +1915,16 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
 
       setFlashcardGenProgress('Enviando para IA...')
 
-      // Chamar API
+      // LEGADO: preferir topicoFlashcardsService (material→dossiê→lotes). Mantido com thinking barato.
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' + readEnv('VITE_GEMINI_API_KEY'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 32000
+            temperature: 0.35,
+            maxOutputTokens: 32000,
+            thinkingConfig: { thinkingLevel: 'low' },
           }
         })
       })
@@ -6950,6 +6952,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'guia-mentorado', label: '📅 Guia Mentorado', icon: '📅' },
     { id: 'professor-fiscalizador', label: '🎓 Professor IA', icon: '🎓' },
     { id: 'generation-jobs', label: '⚡ Jobs locais', icon: '⚡' },
+    { id: 'ai-costs', label: '💰 Custos IA', icon: '💰' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' }
   ]
   
@@ -13364,6 +13367,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
 
             {activeTab === 'generation-jobs' && <AdminGenerationJobs />}
+
+            {activeTab === 'ai-costs' && <AdminAiUsageCosts />}
           </div>
         </div>
 

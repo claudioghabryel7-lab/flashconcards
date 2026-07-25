@@ -9,6 +9,7 @@ export function buildAiOptions(courseId, overrides = {}) {
     useGoogleSearch: true,
     thinkingLevel: 'low',
     verifyContent: true,
+    purpose: overrides.purpose || 'content',
     ...overrides,
   }
 }
@@ -17,6 +18,7 @@ export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, statu
   return {
     prompt,
     aiOptions: buildAiOptions(courseId, {
+      purpose: 'material',
       generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
     }),
     savePlan: {
@@ -30,7 +32,7 @@ export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, statu
 export function buildQuestoesTopicoPayload({ prompt, courseId, topicKey, topicoNome, nivel, status, forceRegenerate = false }) {
   return {
     prompt,
-    aiOptions: buildAiOptions(courseId),
+    aiOptions: buildAiOptions(courseId, { purpose: 'questoes' }),
     savePlan: {
       topicKey,
       topicoNome,
@@ -44,7 +46,7 @@ export function buildQuestoesTopicoPayload({ prompt, courseId, topicKey, topicoN
 export function buildConteudoIncidenciaPayload({ prompt, courseId, disciplinaNome, disciplinaIdx, status }) {
   return {
     prompt,
-    aiOptions: buildAiOptions(courseId),
+    aiOptions: buildAiOptions(courseId, { purpose: 'incidencia_material' }),
     savePlan: {
       disciplinaNome,
       disciplinaIdx,
@@ -63,7 +65,7 @@ export function buildQuestoesIncidenciaPayload({
 }) {
   return {
     prompt,
-    aiOptions: buildAiOptions(courseId),
+    aiOptions: buildAiOptions(courseId, { purpose: 'incidencia_questoes' }),
     savePlan: {
       disciplinaNome,
       disciplinaIdx,
@@ -82,7 +84,10 @@ export function buildFlashcardsTopicoPayload({
 }) {
   return {
     forceFresh: Boolean(forceRegenerate),
-    aiOptions: buildAiOptions(courseId, { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } }),
+    aiOptions: buildAiOptions(courseId, {
+      purpose: 'flashcards',
+      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
+    }),
     savePlan: {
       flashcardMeta,
       status: status || null,

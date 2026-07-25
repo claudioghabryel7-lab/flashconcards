@@ -22,6 +22,7 @@ import {
   VERIFY_GEMINI_MODELS,
   withCostSafeThinking,
 } from './geminiModels.js'
+import { trackGeminiUsage } from '../services/aiUsageTracker.js'
 
 const MODELS = getDefaultGeminiModels()
 const VERIFY_MODELS = VERIFY_GEMINI_MODELS
@@ -176,6 +177,18 @@ async function callGeminiViaServer(prompt, options = {}) {
   if (!response.ok) {
     throw new Error(data.error || `Erro na API Gemini (${response.status})`)
   }
+
+  const modelUsed =
+    data?.modelUsed ||
+    (Array.isArray(options.models) && options.models[0]) ||
+    GEMINI_FLASH_MODEL
+  void trackGeminiUsage({
+    response: data,
+    model: modelUsed,
+    purpose: options.purpose || 'generate',
+    courseId: options.courseId || null,
+  })
+
   return data
 }
 
@@ -280,8 +293,10 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     // low: qualidade de material/questões sem o default medium do Gemini 3.6
     thinkingLevel = 'low',
     silent = false,
+    purpose = silent ? 'json' : 'generate',
   } = options
 
+  const effectivePurpose = options.purpose || purpose
   const effectiveVerify = Boolean(verifyContent)
   // Em silent, só ativa se o caller pediu explicitamente
   const effectiveGoogleSearch = silent
@@ -326,6 +341,8 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     tools,
     thinkingLevel,
     silent,
+    purpose: effectivePurpose,
+    courseId: courseId || null,
   })
 
   if (!effectiveVerify) return response
@@ -353,6 +370,8 @@ export async function callGeminiWithRetry(prompt, options = {}) {
       generationConfig: VERIFY_GENERATION_CONFIG,
       useGoogleSearch: verifyWithSearch,
       thinkingLevel: 'minimal',
+      purpose: 'verify',
+      courseId: courseId || null,
     })
     const verifyText = extractGeneratedText(verifyResponse)
     const verification = parseVerificationResult(verifyText)
@@ -386,6 +405,8 @@ async function executeGeminiRequest(prompt, options = {}) {
     tools = [],
     thinkingLevel = 'low',
     silent = false,
+    purpose = 'generate',
+    courseId = null,
   } = options
 
   const finalPrompt = prompt
@@ -404,6 +425,8 @@ async function executeGeminiRequest(prompt, options = {}) {
       models,
       thinkingLevel,
       silent,
+      purpose,
+      courseId,
     })
   }
 
@@ -480,6 +503,12 @@ async function executeGeminiRequest(prompt, options = {}) {
           const retryData = await retryRes.json()
           if (retryRes.ok) {
             if (!silent) console.log(`✅ Sucesso com modelo ${model} (sem thinkingConfig)`)
+            void trackGeminiUsage({
+              response: retryData,
+              model,
+              purpose,
+              courseId,
+            })
             return retryData
           }
         }
@@ -498,6 +527,12 @@ async function executeGeminiRequest(prompt, options = {}) {
       }
 
       if (!silent) console.log(`✅ Sucesso com modelo ${model}`)
+      void trackGeminiUsage({
+        response: data,
+        model,
+        purpose,
+        courseId,
+      })
       return data
 
     } catch (error) {
@@ -518,6 +553,8 @@ async function executeGeminiRequest(prompt, options = {}) {
         models,
         thinkingLevel,
         silent,
+        purpose,
+        courseId,
       })
     } catch (serverErr) {
       lastError = serverErr

@@ -682,17 +682,20 @@ REGRAS FINAIS:
         isLegalContent: true,
         useRAG: false,
         trustedGeneration: true,
-        useGoogleSearch: !richDossier,
+        // Material: SEMPRE Search (1x) + dossiê — qualidade igual ao início
+        useGoogleSearch: true,
         // Verify jurídico sem 2º grounding (geminiApi: verifyWithSearch=false se já grounded)
         verifyContent: true,
         thinkingLevel: 'low',
+        purpose: 'material',
         maxContinues: 4,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       }
       let parsed = await generateAiJson(promptWithDossier, genOpts)
       parsed = await ensureMaterialContentComplete(parsed, {
         generateAiJson,
-        generateOptions: { ...genOpts, useGoogleSearch: !richDossier },
+        // Aprofundamento sem Search extra
+        generateOptions: { ...genOpts, useGoogleSearch: false, purpose: 'material_deepen' },
         context: {
           topico: effectiveTopicNome || resolvedTopicKey,
           banca: exam.banca,

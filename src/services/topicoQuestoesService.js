@@ -170,6 +170,7 @@ A tentativa anterior falhou ou veio vazia/inválida. Gere de novo EXATAMENTE 5 q
             useGoogleSearch: !richDossier,
             useRAG: false,
             thinkingLevel: 'low',
+            purpose: 'questoes',
             maxContinues: 2,
             generationConfig: {
               maxOutputTokens: 16000,

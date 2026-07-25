@@ -127,22 +127,18 @@ export async function ensureMaterialForTopico({
   const richDossier = hasRichDossier(dossier)
   const promptWithDossier = appendGoogleAiDossier(prompt, dossier?.text)
 
-  await onProgress(
-    25,
-    richDossier
-      ? 'Gerando material com dossiê (sem Search extra)…'
-      : 'Gerando material de apoio do tópico…',
-  )
+  await onProgress(25, 'Gerando material com Search + dossiê (qualidade máxima)…')
   let parsed = await generateAiJson(promptWithDossier, {
     courseId: resolvedId,
     trustedGeneration: true,
-    // Dossiê rico já trouxe os fatos (1 Search); senão Search na geração
-    useGoogleSearch: !richDossier,
+    // Material: SEMPRE Search (1x) + dossiê — qualidade igual ao início
+    useGoogleSearch: true,
     // Auditoria pós em material jurídico (sem 2º grounding — geminiApi desliga Search no verify)
     verifyContent: isLegal,
     isLegalContent: isLegal,
     useRAG: false,
     thinkingLevel: 'low',
+    purpose: 'material',
     maxContinues: 4,
     courseContext,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
@@ -168,10 +164,12 @@ export async function ensureMaterialForTopico({
     generateOptions: {
       courseId: resolvedId,
       trustedGeneration: true,
-      useGoogleSearch: !richDossier,
+      // Aprofundamento: sem Search extra (fatos já no material/dossiê)
+      useGoogleSearch: false,
       verifyContent: false,
       isLegalContent: isLegal,
       thinkingLevel: 'low',
+      purpose: 'material_deepen',
       courseContext,
       generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
     },

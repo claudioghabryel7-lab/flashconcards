@@ -168,6 +168,7 @@ JSON: { "dossier": "..." }`,
       verifyContent: false,
       forceAudit: false,
       trustedGeneration: true,
+      purpose: 'dossier',
       generationConfig: { temperature: 0, maxOutputTokens: 8192 },
       courseContext: {
         banca: exam.banca,
@@ -189,6 +190,7 @@ async function buildDossierWithGeminiSearch(meta) {
     verifyContent: false,
     forceAudit: false,
     trustedGeneration: true,
+    purpose: 'dossier',
     generationConfig: { temperature: 0, maxOutputTokens: 8192 },
     courseContext: {
       banca: meta.banca,

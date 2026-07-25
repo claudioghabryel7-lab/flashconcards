@@ -701,6 +701,23 @@ service cloud.firestore {
         .hasOnly(['completed', 'acertos', 'erros', 'aproveitamento', 'totalQuestoes', 'completedAt']);
       allow delete: if isAdmin();
     }
+
+    /** Telemetria de tokens/custo Gemini (painel admin) */
+    match /aiUsageEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'provider', 'model', 'totalTokens', 'estimatedUsd', 'dayKey', 'userId', 'createdAtMs'
+        ]);
+      allow update, delete: if isAdmin();
+    }
+
+    match /aiUsageDaily/{dayId} {
+      allow read: if isAdmin();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
     
     match /leads/{leadId} {
       allow read: if isAuthenticated() && 
