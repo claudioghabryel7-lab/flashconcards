@@ -4,42 +4,102 @@
  * continuar igual — material, questões, flashcards, chat, etc.
  */
 
-import { getOllamaBaseUrl, getOllamaModel, getOllamaModels } from './serverSecrets.js'
+import {
+  getOllamaBaseUrl,
+  getOllamaModel,
+  getOllamaModels,
+  getOllamaRaw,
+} from './serverSecrets.js'
 
 /**
  * Converte resposta Ollama → shape Gemini que o app já parseia.
- * @param {{ response?: string, done?: boolean, model?: string }} ollamaData
+ * @param {{ response?: string, message?: { content?: string }, done?: boolean, model?: string }} ollamaData
  */
 export function ollamaToGeminiShape(ollamaData) {
-  const text = String(ollamaData?.response ?? '')
+  const text = String(
+    ollamaData?.response ?? ollamaData?.message?.content ?? '',
+  )
   const done = ollamaData?.done !== false
+  const finish =
+    String(ollamaData?.done_reason || '').toLowerCase() === 'length'
+      ? 'MAX_TOKENS'
+      : done
+        ? 'STOP'
+        : 'MAX_TOKENS'
   return {
     candidates: [
       {
         content: {
           parts: [{ text }],
         },
-        finishReason: done ? 'STOP' : 'MAX_TOKENS',
+        finishReason: finish,
       },
     ],
     modelVersion: ollamaData?.model || getOllamaModel(),
   }
 }
 
-function buildOllamaGenerateBody(prompt, { model, generationConfig = {} } = {}) {
+/**
+ * Phi-2 (base) ignora instruções soltas e “completa código”.
+ * Empacota o prompt em formato Instruct/Response.
+ */
+function wrapPromptForModel(prompt, model, useRaw) {
+  const text = String(prompt ?? '')
+  const name = String(model || '').toLowerCase()
+  if (!useRaw || !name.includes('phi') || name.includes('phi3') || name.includes('phi-3')) {
+    return text
+  }
+  if (/###\s*Instruction:|Instruct:|###\s*Response:/i.test(text)) return text
+  return `### Instruction:\n${text}\n\n### Response:\n`
+}
+
+function buildOllamaGenerateBody(prompt, { model, generationConfig = {}, raw } = {}) {
   const temperature = Number(generationConfig.temperature ?? 0.35)
-  const numPredict = Number(
-    generationConfig.maxOutputTokens ?? generationConfig.num_predict ?? 32000,
+  // phi tem context ~2048 — num_predict alto demais costuma atrapalhar
+  const requested = Number(
+    generationConfig.maxOutputTokens ?? generationConfig.num_predict ?? 1024,
   )
+  const numPredict = Math.min(
+    Number.isFinite(requested) ? requested : 1024,
+    1536,
+  )
+  const useRaw = raw ?? getOllamaRaw(model)
+  const modelName = model || getOllamaModel()
   return {
-    model: model || getOllamaModel(),
-    prompt: String(prompt ?? ''),
+    model: modelName,
+    prompt: wrapPromptForModel(prompt, modelName, useRaw),
     stream: false,
+    raw: Boolean(useRaw),
     options: {
       temperature: Number.isFinite(temperature) ? temperature : 0.35,
-      num_predict: Number.isFinite(numPredict) ? numPredict : 32000,
+      num_predict: numPredict,
     },
   }
+}
+
+async function postGenerate(baseUrl, body) {
+  const response = await fetch(`${baseUrl}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const rawText = await response.text()
+  let data
+  try {
+    data = JSON.parse(rawText)
+  } catch {
+    const err = new Error(
+      `Ollama retornou resposta inválida (HTTP ${response.status})`,
+    )
+    err.status = response.status
+    throw err
+  }
+  if (!response.ok) {
+    const err = new Error(data?.error || `HTTP ${response.status}`)
+    err.status = response.status
+    throw err
+  }
+  return data
 }
 
 /**
@@ -59,35 +119,33 @@ export async function generateWithOllama(prompt, options = {}) {
 
   for (const model of models) {
     try {
-      const response = await fetch(`${baseUrl}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
+      const preferRaw = getOllamaRaw(model)
+      let data = await postGenerate(
+        baseUrl,
+        buildOllamaGenerateBody(prompt, {
+          model,
+          generationConfig: options.generationConfig,
+          raw: preferRaw,
+        }),
+      )
+
+      let shaped = ollamaToGeminiShape(data)
+      let text = shaped.candidates?.[0]?.content?.parts?.[0]?.text
+
+      // Phi sem raw costuma devolver só espaço — tenta de novo em raw
+      if ((!text || !String(text).trim()) && !preferRaw) {
+        data = await postGenerate(
+          baseUrl,
           buildOllamaGenerateBody(prompt, {
             model,
             generationConfig: options.generationConfig,
+            raw: true,
           }),
-        ),
-      })
-
-      const rawText = await response.text()
-      let data
-      try {
-        data = JSON.parse(rawText)
-      } catch {
-        lastError = `Ollama retornou resposta inválida (HTTP ${response.status})`
-        continue
+        )
+        shaped = ollamaToGeminiShape(data)
+        text = shaped.candidates?.[0]?.content?.parts?.[0]?.text
       }
 
-      if (!response.ok) {
-        lastError = data?.error || `HTTP ${response.status}`
-        // modelo ausente → tenta próximo
-        if (response.status === 404) continue
-        continue
-      }
-
-      const shaped = ollamaToGeminiShape(data)
-      const text = shaped.candidates?.[0]?.content?.parts?.[0]?.text
       if (!text || !String(text).trim()) {
         lastError = `A IA local não retornou texto (modelo=${model})`
         continue
@@ -97,6 +155,7 @@ export async function generateWithOllama(prompt, options = {}) {
       lastError =
         err?.message ||
         `Falha ao conectar na IA local (${baseUrl}). Ollama está rodando no PC?`
+      if (err?.status === 404) continue
     }
   }
 

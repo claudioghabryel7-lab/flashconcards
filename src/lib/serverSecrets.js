@@ -16,9 +16,22 @@ export function getOllamaBaseUrl() {
   return read('OLLAMA_BASE_URL') || 'http://localhost:11434'
 }
 
-/** Modelo principal no Ollama (ex.: llama3.2, qwen2.5:14b, mistral). */
+/** Modelo principal no Ollama (ex.: phi, llama3.2, qwen2.5:14b). */
 export function getOllamaModel() {
-  return read('OLLAMA_MODEL') || read('VITE_GEMINI_MODEL') || 'llama3.2'
+  return read('OLLAMA_MODEL') || read('VITE_GEMINI_MODEL') || 'phi'
+}
+
+/**
+ * Modo raw do Ollama (sem template de chat).
+ * Phi-2 costuma devolver vazio sem raw=true.
+ * OLLAMA_RAW=true|false — se vazio, auto para modelos "phi".
+ */
+export function getOllamaRaw(model) {
+  const forced = read('OLLAMA_RAW').toLowerCase()
+  if (forced === 'true' || forced === '1' || forced === 'yes') return true
+  if (forced === 'false' || forced === '0' || forced === 'no') return false
+  const name = String(model || getOllamaModel() || '').toLowerCase()
+  return name.includes('phi')
 }
 
 /**

@@ -6,12 +6,12 @@ O site chama a IA **como se fosse Gemini**, mas o servidor encaminha para o Olla
 1. Instale e rode o Ollama no PC: https://ollama.com
 2. Baixe um modelo, por exemplo:
    ```bash
-   ollama pull llama3.2
+   ollama pull phi
    ```
 3. Configure no `.env.local` (ou Vercel):
    ```
-   OLLAMA_BASE_URL=http://localhost:11434
-   OLLAMA_MODEL=llama3.2
+   OLLAMA_BASE_URL=https://violet-webs-poke.loca.lt
+   OLLAMA_MODEL=phi
    ```
 
 ### Dois jeitos de usar
@@ -21,11 +21,14 @@ O site chama a IA **como se fosse Gemini**, mas o servidor encaminha para o Olla
 - `OLLAMA_BASE_URL=http://localhost:11434`  
 - Deixe o PC ligado com o Ollama aberto
 
-**B) Site na Vercel + Ollama no PC**  
+**B) Site na Vercel + Ollama no PC (seu caso com localtunnel)**  
 - A Vercel **não** alcança `localhost` do seu PC  
-- Exponha o Ollama com um túnel (Cloudflare Tunnel / ngrok)  
+- Exponha o Ollama: `npx localtunnel --port 11434`  
 - Coloque a URL pública em `OLLAMA_BASE_URL` no painel da Vercel  
-- Redeploy
+- **Não feche** a janela do túnel; se reiniciar o PC, a URL muda e precisa atualizar de novo  
+- Redeploy após mudar a variável
+
+**Nota sobre o modelo `phi`:** é leve (3B) e tem contexto curto (~2048). Serve para testes; para material longo, prefira `llama3.2` ou `qwen2.5:7b`.
 
 ## Google Search API (RAG — opcional)
 1. Crie uma Custom Search Engine: https://programmablesearchengine.google.com/

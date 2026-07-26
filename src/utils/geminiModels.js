@@ -18,7 +18,7 @@ function resolvePrimaryModel() {
   return (
     readServer('OLLAMA_MODEL') ||
     String(readEnv('VITE_GEMINI_MODEL') || '').trim() ||
-    'llama3.2'
+    'phi'
   )
 }
 
@@ -65,7 +65,7 @@ export function getDefaultGeminiModels() {
     readServer('OLLAMA_MODEL') ||
     ''
   const defaults = [...GEMINI_COST_MODELS]
-  if (!preferred) return defaults.length ? defaults : ['llama3.2']
+  if (!preferred) return defaults.length ? defaults : ['phi']
   return [preferred, ...defaults.filter((m) => m !== preferred)]
 }
 
