@@ -12,6 +12,9 @@ export const ENV = {
   VITE_GEMINI_MODEL: process.env.VITE_GEMINI_MODEL,
   VITE_GEMINI_TTS_MODEL: process.env.VITE_GEMINI_TTS_MODEL,
   VITE_MERCADOPAGO_PUBLIC_KEY: process.env.VITE_MERCADOPAGO_PUBLIC_KEY,
+  /** URL do Ollama no PC (browser → localhost, sem túnel). */
+  VITE_OLLAMA_BASE_URL: process.env.VITE_OLLAMA_BASE_URL || process.env.NEXT_PUBLIC_OLLAMA_BASE_URL,
+  VITE_OLLAMA_MODEL: process.env.VITE_OLLAMA_MODEL || process.env.NEXT_PUBLIC_OLLAMA_MODEL,
   DEV: process.env.NODE_ENV !== 'production',
   PROD: process.env.NODE_ENV === 'production',
   MODE: process.env.NODE_ENV || 'development',
