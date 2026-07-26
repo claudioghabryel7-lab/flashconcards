@@ -14,6 +14,11 @@ const clientEnvKeys = [
   'VITE_GEMINI_MODEL',
   'VITE_GEMINI_TTS_MODEL',
   'VITE_MERCADOPAGO_PUBLIC_KEY',
+  // Ollama no PC via browser (sem túnel)
+  'VITE_OLLAMA_BASE_URL',
+  'VITE_OLLAMA_MODEL',
+  'NEXT_PUBLIC_OLLAMA_BASE_URL',
+  'NEXT_PUBLIC_OLLAMA_MODEL',
 ]
 
 const env: Record<string, string> = {}
