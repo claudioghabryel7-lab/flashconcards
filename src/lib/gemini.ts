@@ -1,33 +1,29 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { getGeminiApiKey } from './serverSecrets'
+/**
+ * Facade server-only da IA.
+ * Mantém a API antiga (geminiModel.generateContent) mas usa Ollama no PC.
+ */
+import { generateWithOllama } from './ollamaClient.js'
+import { collectGeminiTextParts } from '../utils/geminiResponseUtils.js'
 import { GEMINI_FLASH_MODEL, getDefaultGeminiModels } from '../utils/geminiModels.js'
 
 const MODELS = getDefaultGeminiModels()
 
-function getApiKey() {
+function assertServerOnly() {
   if (typeof window !== 'undefined') {
     throw new Error('gemini.ts é server-only. Use createGeminiBrowserClient() no client.')
   }
-  return getGeminiApiKey() || ''
-}
-
-let genAI: GoogleGenerativeAI | null = null
-
-function getGenAI() {
-  if (!genAI) {
-    const apiKey = getApiKey()
-    if (!apiKey) {
-      throw new Error('Chave Gemini não configurada (GEMINI_API_KEY)')
-    }
-    genAI = new GoogleGenerativeAI(apiKey)
-  }
-  return genAI
 }
 
 export const geminiModel = {
   async generateContent(prompt: string) {
-    const model = getGenAI().getGenerativeModel({ model: GEMINI_FLASH_MODEL })
-    return model.generateContent(prompt)
+    assertServerOnly()
+    const data = await generateWithOllama(prompt, { model: GEMINI_FLASH_MODEL })
+    const text = collectGeminiTextParts(data)
+    return {
+      response: {
+        text: () => text,
+      },
+    }
   },
 }
 
@@ -35,22 +31,28 @@ export async function callGeminiWithFallback(
   prompt: string,
   options?: { temperature?: number; maxOutputTokens?: number },
 ) {
+  assertServerOnly()
   const { temperature = 0.7, maxOutputTokens = 32000 } = options || {}
 
+  let lastError: unknown
   for (const modelName of MODELS) {
     try {
-      const model = getGenAI().getGenerativeModel({
+      const data = await generateWithOllama(prompt, {
         model: modelName,
         generationConfig: { temperature, maxOutputTokens },
       })
-      const result = await model.generateContent(prompt)
-      return result.response.text()
+      const text = collectGeminiTextParts(data)
+      if (text) return text
+      lastError = new Error(`Resposta vazia do modelo ${modelName}`)
     } catch (error) {
       console.error(`Erro com modelo ${modelName}:`, error)
+      lastError = error
     }
   }
 
-  throw new Error('Todos os modelos Gemini falharam')
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Todos os modelos da IA local falharam')
 }
 
 export async function testGeminiAPI() {
@@ -62,4 +64,7 @@ export async function testGeminiAPI() {
   }
 }
 
-export { getGenAI as genAI }
+/** Compat: código antigo importava genAI do SDK Google — removido. */
+export function genAI() {
+  throw new Error('SDK Google removido. Use geminiModel / generateWithOllama (IA local).')
+}

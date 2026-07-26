@@ -1,9 +1,9 @@
 /**
- * Função utilitária para chamadas à API Gemini com retry e fallback de modelos
- * Resolve erros de alta demanda implementando exponential backoff e modelos alternativos
- * Integra verificação de fontes oficiais para garantir veracidade do conteúdo
- * Implementa RAG (Retrieval-Augmented Generation) com Google Search para evitar alucinações
- * Browser: proxy autenticado /api/gemini/generate. Servidor: GEMINI_API_KEY.
+ * Chamadas à IA com retry e fallback de modelos.
+ * Backend real = Ollama no PC (via /api/gemini/generate ou generateWithOllama).
+ * Mantém nomes/formato Gemini para o resto do app não mudar.
+ * Browser: proxy autenticado /api/gemini/generate → Ollama.
+ * Servidor: generateWithOllama direto.
  */
 
 import { performRAG, googleSearch } from './googleSearch.js'
@@ -37,6 +37,8 @@ export {
   wasGeminiTruncated,
   withLiteThinkingConfig,
 } from './geminiResponseUtils.js'
+
+// withLiteThinkingConfig ainda exportado por compat; IA local ignora thinkingConfig.
 
 const MODELS = getDefaultGeminiModels()
 const VERIFY_MODELS = VERIFY_GEMINI_MODELS
@@ -74,11 +76,17 @@ export function isGeminiQuotaError(error) {
 }
 
 export function formatAiErrorForUser(error) {
+  const code = String(error?.code || '')
+  if (code === 'ollama_unavailable') {
+    return (
+      error?.message ||
+      'IA local indisponível. Deixe o Ollama rodando no seu PC (OLLAMA_BASE_URL).'
+    )
+  }
   if (isGeminiQuotaError(error)) {
-    return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
+    return 'IA local sobrecarregada ou indisponível. Confira o Ollama no PC e tente de novo.'
   }
 
-  const code = String(error?.code || '')
   const msg = String(error?.message || '').trim()
 
   // Erros de negócio / bot (já em português) — não mascarar
@@ -154,86 +162,23 @@ function extractSearchTopic(prompt) {
   return topic || 'legislação brasileira atualizada'
 }
 
-/**
- * API key só no servidor Node. No browser sempre undefined (proxy autenticado).
- */
-function getApiKey() {
-  if (typeof window !== 'undefined') return undefined
-  try {
-    // import dinâmico evitado — serverSecrets usa process.env
-    const key =
-      (typeof process !== 'undefined' &&
-        (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)) ||
-      ''
-    return key.trim() || undefined
-  } catch {
-    return undefined
-  }
-}
-
 async function callGeminiViaServer(prompt, options = {}) {
   const { callGeminiProxy } = await import('./secureLlmClient.js')
   return callGeminiProxy({ prompt, ...options })
 }
 
 /**
- * Teste silencioso de API key para verificar se está disponível
- * Usa a mesma lógica robusta de testApiKey
- * @param {string} apiKey - A API key para testar
- * @returns {Promise<boolean>} - True se a key está disponível
+ * Healthcheck da IA local (Ollama no PC).
+ * @returns {Promise<boolean>}
  */
-async function silentTestApiKey(apiKey) {
+async function isLocalAiReady() {
+  if (typeof window !== 'undefined') return true
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'test' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
-      }
-    )
-
-    const data = await response.json()
-
-    // Se for 429 (quota), não está disponível
-    if (response.status === 429) {
-      return false
-    }
-    
-    // Se for 503 (alta demanda), não está disponível
-    if (response.status === 503) {
-      return false
-    }
-    
-    // Se for 403 (forbidden), não está disponível
-    if (response.status === 403) {
-      return false
-    }
-    
-    // Se for 400 (invalid), não está disponível
-    if (response.status === 400) {
-      return false
-    }
-    
-    return response.ok
-  } catch (error) {
+    const { isOllamaAvailable } = await import('../lib/ollamaClient.js')
+    return await isOllamaAvailable()
+  } catch {
     return false
   }
-}
-
-/**
- * Retorna a API key se estiver disponível (teste silencioso)
- * @returns {Promise<string|undefined>}
- */
-async function getAvailableApiKey() {
-  const apiKey = getApiKey()
-  if (!apiKey) return undefined
-
-  const isAvailable = await silentTestApiKey(apiKey)
-  return isAvailable ? apiKey : undefined
 }
 
 /**
@@ -258,8 +203,8 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
-    useGoogleSearch = true,
-    useRAG = options.isLegalContent !== false,
+    useGoogleSearch = false,
+    useRAG = false,
     ragTopic = null,
     isLegalContent = true,
     useFunctionCalling = false,
@@ -349,12 +294,12 @@ export async function callGeminiWithRetry(prompt, options = {}) {
 }
 
 /**
- * Execução bruta da API Gemini (sem contexto de curso nem verificação).
+ * Execução bruta da IA (sem contexto de curso nem verificação).
+ * Browser → proxy /api/gemini/generate → Ollama no PC
+ * Servidor → generateWithOllama direto
  */
 async function executeGeminiRequest(prompt, options = {}) {
   const {
-    maxRetries = MAX_RETRIES,
-    baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
     useGoogleSearch = true,
@@ -365,154 +310,66 @@ async function executeGeminiRequest(prompt, options = {}) {
 
   const finalPrompt = prompt
 
-  // Browser: sempre proxy autenticado (nunca embute API key no client)
+  // Browser: proxy autenticado → Ollama no PC (mesmo contrato Gemini)
   if (typeof window !== 'undefined') {
-    if (!silent) console.log('🔑 Gemini via /api/gemini/generate (servidor)')
+    if (!silent) console.log('🖥️ IA local via /api/gemini/generate → Ollama no PC')
     return callGeminiViaServer(finalPrompt, {
       generationConfig,
-      useGoogleSearch,
-      useFunctionCalling,
-      tools,
+      useGoogleSearch: false,
+      useFunctionCalling: false,
+      tools: [],
       models,
       silent,
     })
   }
 
-  let apiKey = await getAvailableApiKey()
-
-  if (!apiKey) {
-    throw new Error(
-      'Nenhuma API key do Gemini no servidor. Defina GEMINI_API_KEY no .env.local ou no Vercel.',
+  const ready = await isLocalAiReady()
+  if (!ready) {
+    const err = new Error(
+      'IA local indisponível. Deixe o Ollama rodando no PC e confira OLLAMA_BASE_URL / OLLAMA_MODEL.',
     )
+    err.code = 'ollama_unavailable'
+    throw err
   }
 
   if (!silent) {
-    console.log('🔑 Usando GEMINI_API_KEY (servidor)')
-    if (useGoogleSearch) console.log(`🔍 Google Search Grounding ativado`)
-    if (useFunctionCalling) console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
+    console.log('🖥️ Usando IA local (Ollama no PC)')
+    if (useGoogleSearch) {
+      console.log('ℹ️ Google Search Grounding ignorado (IA local)')
+    }
+    if (useFunctionCalling) {
+      console.log(`ℹ️ Function Calling ignorado (IA local), ${tools.length} tool(s)`)
+    }
   }
 
+  const { generateWithOllama } = await import('../lib/ollamaClient.js')
   let lastError = null
 
   for (const model of models) {
-    if (!silent) console.log(`🔄 Tentando modelo: ${model}`)
-
+    if (!silent) console.log(`🔄 Tentando modelo local: ${model}`)
     try {
-      const requestBody = {
-        contents: [{ parts: [{ text: finalPrompt }] }],
-        generationConfig: withLiteThinkingConfig(generationConfig, model),
-      }
-
-      // Adicionar Google Search Grounding se solicitado
-      if (useGoogleSearch) {
-        requestBody.tools = [
-          {
-            googleSearch: {}
-          }
-        ]
-      }
-
-      // Adicionar Function Calling se solicitado
-      if (useFunctionCalling && tools.length > 0) {
-        requestBody.tools = requestBody.tools || []
-        requestBody.tools.push(...tools)
-      }
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        }
-      )
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        const errorMessage = data.error?.message || 'Erro na API da IA'
-
-        // thinkingConfig inválido em algum modelo → tenta de novo sem ele
-        if (
-          response.status === 400 &&
-          /thinking/i.test(errorMessage) &&
-          requestBody.generationConfig?.thinkingConfig
-        ) {
-          if (!silent) console.log(`⚠️ ${model}: thinkingConfig rejeitado — retry sem thinking`)
-          const retryBody = {
-            ...requestBody,
-            generationConfig: { ...(generationConfig || {}) },
-          }
-          delete retryBody.generationConfig.thinkingConfig
-          const retryRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(retryBody),
-            },
-          )
-          const retryData = await retryRes.json()
-          if (retryRes.ok && hasUsableGeminiText(retryData)) {
-            if (!silent) console.log(`✅ Sucesso com modelo ${model} (sem thinkingConfig)`)
-            return retryData
-          }
-        }
-
-        // Se for erro 429/503 (quota/alta demanda) ou 404 (modelo indisponível), tentar próximo
-        if (response.status === 429 || response.status === 503 || response.status === 404) {
-          if (!silent) console.log(`⚠️ Modelo ${model} com erro (${response.status}), tentando próximo...`)
-          lastError = new Error(errorMessage)
-          if (response.status === 429) lastError.code = 'quota_exceeded'
-          continue
-        }
-
-        const err = new Error(errorMessage)
-        if (response.status === 429) err.code = 'quota_exceeded'
-        throw err
-      }
-
-      // HTTP 200 mas sem texto (Lite esgotou em thinking / só thought) → próximo modelo
+      const data = await generateWithOllama(finalPrompt, {
+        model,
+        generationConfig,
+      })
       if (!hasUsableGeminiText(data)) {
         const reason = getGeminiFinishReason(data) || 'EMPTY'
-        if (!silent) {
-          console.log(`⚠️ Modelo ${model} sem texto útil (finishReason=${reason}), tentando próximo…`)
-        }
-        lastError = new Error(`A IA não retornou texto (finishReason=${reason}).`)
+        lastError = new Error(`A IA local não retornou texto (finishReason=${reason}).`)
         lastError.code = 'ai_empty_response'
         continue
       }
-
-      if (!silent) console.log(`✅ Sucesso com modelo ${model}`)
+      if (!silent) console.log(`✅ Sucesso com modelo local ${model}`)
       return data
-
     } catch (error) {
       lastError = error
       if (!silent) console.error(`❌ Erro com modelo ${model}:`, error.message)
     }
   }
 
-  // Se chegou aqui, todos os modelos falharam
-  if (typeof window !== 'undefined') {
-    try {
-      if (!silent) console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
-      return await callGeminiViaServer(finalPrompt, {
-        generationConfig,
-        useGoogleSearch,
-        useFunctionCalling,
-        tools,
-        models,
-        silent,
-      })
-    } catch (serverErr) {
-      lastError = serverErr
-    }
-  }
-
   const finalErr = new Error(
-    `Todos os modelos falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
+    `Todos os modelos locais falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`,
   )
-  if (isGeminiQuotaError(lastError)) finalErr.code = 'quota_exceeded'
+  if (lastError?.code) finalErr.code = lastError.code
   throw finalErr
 }
 
@@ -540,10 +397,10 @@ export function extractGeneratedText(response) {
   return generatedText
 }
 
-/** True se há pelo menos uma chave Gemini configurada no ambiente. */
+/** True se a IA local (Ollama) está configurada/disponível no servidor. */
 export function hasGeminiApiKeys() {
-  const keys = loadApiKeys()
-  return Array.isArray(keys) && keys.length > 0
+  // Sempre "configurada" no browser (usa proxy). No servidor, URL padrão já basta.
+  return true
 }
 
 /**
@@ -563,7 +420,7 @@ export async function generateAiJson(prompt, options = {}) {
 
   const baseCallOpts = {
     useRAG: false,
-    useGoogleSearch: true,
+    useGoogleSearch: false,
     verifyContent: false,
     ...callOptions,
     silent: true,
@@ -737,83 +594,27 @@ export async function repairJsonText(raw) {
   throw lastError || new Error('Não foi possível reparar o JSON da resposta')
 }
 
-/**
- * Testa o status de uma API key do Gemini
- * @param {string} apiKey - A API key para testar
- * @returns {Promise<Object>} - Status da key
- */
-async function testApiKey(apiKey) {
+/** Testa se a IA local (Ollama) responde. */
+async function testLocalAiStatus() {
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'test' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
-      }
-    )
-
-    const data = await response.json()
-
-    if (response.ok) {
+    const ok = await isLocalAiReady()
+    if (ok) {
       return {
         status: 'active',
-        message: 'Ativa e funcionando',
-        remainingQuota: 'Desconhecido'
+        message: `IA local OK (${GEMINI_FLASH_MODEL})`,
+        remainingQuota: 'Ilimitado (seu PC)',
       }
     }
-
-    // Interpretar erros
-    if (response.status === 429) {
-      const errorInfo = data.error?.details?.[0]
-      const waitTime = errorInfo?.metadata?.retryDelay || errorInfo?.metadata?.waitTime
-      
-      if (waitTime) {
-        const seconds = parseInt(waitTime)
-        return {
-          status: 'rate_limited',
-          message: 'Bloqueada por excesso de requisições',
-          waitTime: seconds,
-          waitTimeFormatted: formatWaitTime(seconds)
-        }
-      }
-      
-      return {
-        status: 'quota_exceeded',
-        message: 'Cota diária esgotada',
-        resetTime: 'Zera na madrugada (UTC)'
-      }
-    }
-
-    if (response.status === 403) {
-      return {
-        status: 'forbidden',
-        message: 'Projeto bloqueado ou sem permissão',
-        error: data.error?.message || 'Acesso negado'
-      }
-    }
-
-    if (response.status === 400) {
-      return {
-        status: 'invalid',
-        message: 'Chave inválida ou não encontrada',
-        error: data.error?.message || 'API Key not found'
-      }
-    }
-
     return {
       status: 'error',
-      message: `Erro ${response.status}`,
-      error: data.error?.message || 'Erro desconhecido'
+      message: 'Ollama não respondeu',
+      error: 'Deixe o Ollama rodando no PC e confira OLLAMA_BASE_URL',
     }
   } catch (error) {
     return {
       status: 'error',
-      message: 'Erro ao conectar',
-      error: error.message
+      message: 'Erro ao conectar na IA local',
+      error: error.message,
     }
   }
 }
@@ -842,11 +643,10 @@ function formatWaitTime(seconds) {
 }
 
 /**
- * Verifica o status da API key do Gemini
- * @returns {Promise<Array<Object>>} - Lista de status das keys
+ * Verifica o status da IA local (Ollama no PC).
+ * @returns {Promise<Array<Object>>}
  */
 export async function checkGeminiApiKeysStatus() {
-  // No browser: testa o proxy (sem revelar a key)
   if (typeof window !== 'undefined') {
     try {
       await callGeminiViaServer('ping', {
@@ -857,41 +657,31 @@ export async function checkGeminiApiKeysStatus() {
       })
       return [
         {
-          name: 'GEMINI_API_KEY (servidor)',
-          keyPreview: '••••••••',
+          name: 'IA local (Ollama no PC)',
+          keyPreview: GEMINI_FLASH_MODEL,
           status: 'ok',
-          message: 'Proxy autenticado OK',
+          message: 'Proxy → Ollama OK',
         },
       ]
     } catch (err) {
       return [
         {
-          name: 'GEMINI_API_KEY (servidor)',
+          name: 'IA local (Ollama no PC)',
           keyPreview: '—',
           status: 'missing',
-          message: err?.message || 'Configure GEMINI_API_KEY + FIREBASE_SERVICE_ACCOUNT_JSON no servidor.',
+          message:
+            err?.message ||
+            'Deixe o Ollama rodando no PC. Se o site estiver na Vercel, use um túnel em OLLAMA_BASE_URL.',
         },
       ]
     }
   }
 
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    return [
-      {
-        name: 'Configuração',
-        keyPreview: '—',
-        status: 'missing',
-        message: 'Configure GEMINI_API_KEY no servidor.',
-      },
-    ]
-  }
-
-  const status = await testApiKey(apiKey)
+  const status = await testLocalAiStatus()
   return [
     {
-      name: 'GEMINI_API_KEY',
-      keyPreview: '••••••••',
+      name: 'IA local (Ollama no PC)',
+      keyPreview: GEMINI_FLASH_MODEL,
       ...status,
     },
   ]

@@ -1,57 +1,83 @@
 /**
- * Modelos Gemini oficiais usados em todo o app.
+ * Modelos da IA usados em todo o app.
  *
- * Estratégia de custo (sem baixar qualidade):
- * 1) gemini-3.5-flash-lite — principal (mais barato)
- * 2) gemini-3.6-flash — fallback de qualidade se Lite falhar/404/quota
- * 3) gemini-3.5-flash — último fallback Flash
- *
- * Pro fica fora da cadeia padrão (caro); só sob demanda via VITE_GEMINI_MODEL.
+ * Fonte: Ollama no PC (gratuito). Nomes configuráveis via env:
+ * - OLLAMA_MODEL (principal)
+ * - OLLAMA_MODELS (lista separada por vírgula)
+ * - VITE_GEMINI_MODEL (legado / alias do principal)
  */
 import { readEnv } from '../lib/env.js'
 
-/** Mais barato — padrão em todas as gerações. */
-export const GEMINI_FLASH_LITE_MODEL = 'gemini-3.5-flash-lite'
+function readServer(key) {
+  if (typeof process === 'undefined' || !process.env) return ''
+  const v = process.env[key]
+  return v != null && String(v).trim() !== '' ? String(v).trim() : ''
+}
 
-/** Alias: modelo principal do app = Lite. */
+function resolvePrimaryModel() {
+  return (
+    readServer('OLLAMA_MODEL') ||
+    String(readEnv('VITE_GEMINI_MODEL') || '').trim() ||
+    'llama3.2'
+  )
+}
+
+function resolveModelChain() {
+  const list = readServer('OLLAMA_MODELS')
+  if (list) {
+    return list
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  return [resolvePrimaryModel()]
+}
+
+/** Modelo principal (Ollama no PC). */
+export const GEMINI_FLASH_LITE_MODEL = resolvePrimaryModel()
+
+/** Alias: modelo principal do app. */
 export const GEMINI_FLASH_MODEL = GEMINI_FLASH_LITE_MODEL
 
-/** Flash “cheio” — fallback de qualidade. */
-export const GEMINI_FLASH_QUALITY_MODEL = 'gemini-3.6-flash'
+/** Fallback de qualidade (mesmo modelo se não houver cadeia). */
+export const GEMINI_FLASH_QUALITY_MODEL =
+  resolveModelChain()[1] || GEMINI_FLASH_LITE_MODEL
 
-/** Fallback rápido secundário. */
-export const GEMINI_FLASH_FALLBACK_MODEL = 'gemini-3.5-flash'
+/** Fallback secundário. */
+export const GEMINI_FLASH_FALLBACK_MODEL =
+  resolveModelChain()[2] || GEMINI_FLASH_QUALITY_MODEL
 
-/** Modelo mais capaz (não entra na cadeia padrão de custo). */
-export const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview'
+/** Alias legado — não usa Pro pago. */
+export const GEMINI_PRO_MODEL = GEMINI_FLASH_LITE_MODEL
 
 /**
- * Cadeia padrão barata → qualidade.
- * Usar em AdminPanel, chats, API, etc. (única fonte de verdade).
+ * Cadeia padrão Ollama (única fonte de verdade).
  */
-export const GEMINI_COST_MODELS = [
-  GEMINI_FLASH_LITE_MODEL,
-  GEMINI_FLASH_QUALITY_MODEL,
-  GEMINI_FLASH_FALLBACK_MODEL,
-]
+export const GEMINI_COST_MODELS = resolveModelChain()
 
 /**
  * Lista padrão de modelos (ordem de tentativa).
- * Respeita VITE_GEMINI_MODEL se definido (vai para o topo).
+ * Respeita VITE_GEMINI_MODEL / OLLAMA_MODEL se definido (vai para o topo).
  */
 export function getDefaultGeminiModels() {
-  const preferred = String(readEnv('VITE_GEMINI_MODEL') || '').trim()
+  const preferred =
+    String(readEnv('VITE_GEMINI_MODEL') || '').trim() ||
+    readServer('OLLAMA_MODEL') ||
+    ''
   const defaults = [...GEMINI_COST_MODELS]
-  if (!preferred) return defaults
+  if (!preferred) return defaults.length ? defaults : ['llama3.2']
   return [preferred, ...defaults.filter((m) => m !== preferred)]
 }
 
 export const DEFAULT_GEMINI_MODELS = GEMINI_COST_MODELS
 
-/** Verify / healthcheck — Lite (barato). */
+/** Verify / healthcheck — modelo principal. */
 export const VERIFY_GEMINI_MODELS = [GEMINI_FLASH_LITE_MODEL]
 
-/** Modelos Gemini TTS (vozes Live: Kore, Aoede, Despina, Charon…). */
+/**
+ * TTS ainda usa endpoints Gemini (não cobertos pelo Ollama).
+ * Com IA 100% local, voz TTS fica indisponível até haver backend local de áudio.
+ */
 export const GEMINI_TTS_MODELS = [
   'gemini-2.5-flash-preview-tts',
   'gemini-2.5-pro-preview-tts',
