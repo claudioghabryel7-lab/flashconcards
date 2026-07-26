@@ -26,13 +26,12 @@ export const GEMINI_FLASH_FALLBACK_MODEL = 'gemini-3.5-flash'
 export const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview'
 
 /**
- * Cadeia padrão barata → qualidade.
- * Usar em AdminPanel, chats, API, etc. (única fonte de verdade).
+ * Cadeia padrão barata → 1 fallback de qualidade.
+ * Só 2 modelos: Lite + Flash. Terceiro modelo gastava API sem ganho real.
  */
 export const GEMINI_COST_MODELS = [
   GEMINI_FLASH_LITE_MODEL,
   GEMINI_FLASH_QUALITY_MODEL,
-  GEMINI_FLASH_FALLBACK_MODEL,
 ]
 
 /**
