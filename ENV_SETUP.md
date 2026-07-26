@@ -1,34 +1,37 @@
 # Variáveis de Ambiente
 
 ## IA local (Ollama no PC) — padrão do app
-O site chama a IA **como se fosse Gemini**, mas o servidor encaminha para o Ollama no seu PC.
 
-1. Instale e rode o Ollama no PC: https://ollama.com
-2. Baixe um modelo, por exemplo:
+### Modo recomendado: SEM túnel
+O **navegador no seu PC** chama `http://127.0.0.1:11434` direto.  
+Você abre o site normal no Chrome; a IA roda no PC. **Não precisa de localtunnel.**
+
+1. Instale e rode o Ollama: https://ollama.com
+2. Baixe o modelo:
    ```bash
    ollama pull phi
    ```
-3. Configure no `.env.local` (ou Vercel):
+3. **Libere CORS** no Windows (PowerShell, depois reinicie o Ollama):
+   ```powershell
+   [System.Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "*", "User")
    ```
-   OLLAMA_BASE_URL=https://violet-webs-poke.loca.lt
-   OLLAMA_MODEL=phi
-   ```
+   Feche o Ollama na bandeja e abra de novo.
+4. Abra o site no Chrome **neste mesmo PC** e gere conteúdo.
 
-### Dois jeitos de usar
+Opcional no Vercel (URL/modelo no browser):
+```
+VITE_OLLAMA_BASE_URL=http://127.0.0.1:11434
+VITE_OLLAMA_MODEL=phi
+```
 
-**A) Site + Ollama no mesmo PC (mais simples)**  
-- Rode `npm run dev` (ou `npm start`) no PC  
-- `OLLAMA_BASE_URL=http://localhost:11434`  
-- Deixe o PC ligado com o Ollama aberto
+### Fallback com túnel (só se localhost/CORS falhar)
+```
+OLLAMA_BASE_URL=https://seu-tunel.loca.lt
+OLLAMA_MODEL=phi
+```
++ `npx localtunnel --port 11434` (não fechar o CMD)
 
-**B) Site na Vercel + Ollama no PC (seu caso com localtunnel)**  
-- A Vercel **não** alcança `localhost` do seu PC  
-- Exponha o Ollama: `npx localtunnel --port 11434`  
-- Coloque a URL pública em `OLLAMA_BASE_URL` no painel da Vercel  
-- **Não feche** a janela do túnel; se reiniciar o PC, a URL muda e precisa atualizar de novo  
-- Redeploy após mudar a variável
-
-**Nota sobre o modelo `phi`:** é leve (3B) e tem contexto curto (~2048). Serve para testes; para material longo, prefira `llama3.2` ou `qwen2.5:7b`.
+**Nota sobre o modelo `phi`:** contexto curto (~2048). Para material longo: `ollama pull llama3.2`.
 
 ## Google Search API (RAG — opcional)
 1. Crie uma Custom Search Engine: https://programmablesearchengine.google.com/
