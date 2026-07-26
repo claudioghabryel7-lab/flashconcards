@@ -33,12 +33,12 @@ async function authFetch(url, body, { method = 'POST' } = {}) {
   return data
 }
 
-/** Proxy Gemini (generateContent shape). */
+/** Proxy da IA (shape Gemini; backend = Ollama no PC). */
 export async function callGeminiProxy(options = {}) {
   return authFetch('/api/gemini/generate', options)
 }
 
-/** Lista modelos (sem expor key). */
+/** Lista modelos da IA local (sem expor config). */
 export async function listGeminiModelsProxy() {
   const token = await getIdToken()
   const response = await fetch('/api/gemini/models', {

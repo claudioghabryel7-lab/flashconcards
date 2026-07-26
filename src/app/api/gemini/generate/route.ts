@@ -1,109 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireApiAuth } from '@/lib/apiAuth'
-import { getGeminiApiKey } from '@/lib/serverSecrets'
+import { getOllamaBaseUrl, getOllamaModels } from '@/lib/serverSecrets'
+import { generateWithOllama } from '@/lib/ollamaClient.js'
 import { getDefaultGeminiModels } from '@/utils/geminiModels.js'
-import {
-  hasUsableGeminiText,
-  withLiteThinkingConfig,
-  getGeminiFinishReason,
-} from '@/utils/geminiResponseUtils.js'
+import { hasUsableGeminiText, getGeminiFinishReason } from '@/utils/geminiResponseUtils.js'
 
-const DEFAULT_MODELS = getDefaultGeminiModels()
-
+/**
+ * Proxy autenticado: o site chama esta rota "como Gemini",
+ * e o servidor encaminha para a IA local (Ollama) no PC.
+ */
 export async function POST(request: NextRequest) {
   const authResult = await requireApiAuth(request)
   if ('error' in authResult) return authResult.error
 
   try {
     const body = await request.json()
+    const defaultModels = getDefaultGeminiModels()
     const {
       prompt,
       generationConfig = { temperature: 0.35, maxOutputTokens: 32000 },
-      useGoogleSearch = true,
-      useFunctionCalling = false,
-      tools = [],
-      models = DEFAULT_MODELS,
+      models = defaultModels,
     } = body
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt é obrigatório' }, { status: 400 })
     }
 
-    const apiKey = getGeminiApiKey()
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            'Nenhuma API key Gemini no servidor. Configure GEMINI_API_KEY (recomendado) no .env.local ou no Vercel.',
-        },
-        { status: 503 },
-      )
-    }
+    const modelList =
+      Array.isArray(models) && models.length
+        ? models
+        : getOllamaModels().length
+          ? getOllamaModels()
+          : defaultModels
 
     let lastError = 'Erro desconhecido'
-    const modelList = Array.isArray(models) && models.length ? models : DEFAULT_MODELS
 
     for (const model of modelList) {
-      const tryOnce = async (genConfig: Record<string, unknown>) => {
-        const requestBody: Record<string, unknown> = {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: genConfig,
-        }
+      try {
+        const data = await generateWithOllama(prompt, {
+          model,
+          generationConfig,
+        })
 
-        if (useGoogleSearch) {
-          requestBody.tools = [{ googleSearch: {} }]
-        }
-        if (useFunctionCalling && Array.isArray(tools) && tools.length > 0) {
-          requestBody.tools = [...((requestBody.tools as unknown[]) || []), ...tools]
-        }
-
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          },
-        )
-        const data = await response.json()
-        return { response, data }
-      }
-
-      let genConfig = withLiteThinkingConfig(generationConfig, model) as Record<string, unknown>
-      let { response, data } = await tryOnce(genConfig)
-
-      // thinkingConfig rejeitado → retry sem ele
-      if (
-        !response.ok &&
-        response.status === 400 &&
-        /thinking/i.test(String(data.error?.message || '')) &&
-        genConfig.thinkingConfig
-      ) {
-        genConfig = { ...(generationConfig || {}) }
-        delete genConfig.thinkingConfig
-        ;({ response, data } = await tryOnce(genConfig))
-      }
-
-      if (response.ok) {
         if (hasUsableGeminiText(data)) {
           return NextResponse.json(data)
         }
-        // 200 vazio → tenta próximo modelo (Lite → Flash)
-        lastError = `A IA não retornou texto (finishReason=${getGeminiFinishReason(data) || 'EMPTY'})`
-        continue
-      }
 
-      lastError = data.error?.message || `HTTP ${response.status}`
-      if (response.status === 429 || response.status === 503 || response.status === 404) {
+        lastError = `A IA local não retornou texto (finishReason=${getGeminiFinishReason(data) || 'EMPTY'})`
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err)
         continue
       }
     }
 
-    return NextResponse.json({ error: lastError, code: 'ai_empty_response' }, { status: 502 })
-  } catch (error) {
-    console.error('[api/gemini/generate]', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Falha ao chamar Gemini' },
+      {
+        error: lastError,
+        code: 'ai_empty_response',
+        hint: `Confirme que o Ollama está rodando em ${getOllamaBaseUrl()} no seu PC.`,
+      },
+      { status: 502 },
+    )
+  } catch (error) {
+    console.error('[api/gemini/generate] ollama', error)
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Falha ao chamar a IA local (Ollama no PC)',
+      },
       { status: 500 },
     )
   }

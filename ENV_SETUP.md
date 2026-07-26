@@ -1,12 +1,36 @@
 # Variáveis de Ambiente
 
-## Google Gemini API (servidor)
-- `GEMINI_API_KEY`: API Key do Google Gemini — **somente servidor**
-- Não use `VITE_GEMINI_API_KEY` (legado removido do bundle do browser)
-- Modelo padrão: **`gemini-3.5-flash-lite`** (mais barato), com fallback para `gemini-3.6-flash` / `gemini-3.5-flash`
-- Opcional: `VITE_GEMINI_MODEL` para forçar outro modelo no topo da cadeia
+## IA local (Ollama no PC) — padrão do app
+O site chama a IA **como se fosse Gemini**, mas o servidor encaminha para o Ollama no seu PC.
 
-## Google Search API (RAG — servidor)
+1. Instale e rode o Ollama no PC: https://ollama.com
+2. Baixe um modelo, por exemplo:
+   ```bash
+   ollama pull phi
+   ```
+3. Configure no `.env.local` (ou Vercel):
+   ```
+   OLLAMA_BASE_URL=https://violet-webs-poke.loca.lt
+   OLLAMA_MODEL=phi
+   ```
+
+### Dois jeitos de usar
+
+**A) Site + Ollama no mesmo PC (mais simples)**  
+- Rode `npm run dev` (ou `npm start`) no PC  
+- `OLLAMA_BASE_URL=http://localhost:11434`  
+- Deixe o PC ligado com o Ollama aberto
+
+**B) Site na Vercel + Ollama no PC (seu caso com localtunnel)**  
+- A Vercel **não** alcança `localhost` do seu PC  
+- Exponha o Ollama: `npx localtunnel --port 11434`  
+- Coloque a URL pública em `OLLAMA_BASE_URL` no painel da Vercel  
+- **Não feche** a janela do túnel; se reiniciar o PC, a URL muda e precisa atualizar de novo  
+- Redeploy após mudar a variável
+
+**Nota sobre o modelo `phi`:** é leve (3B) e tem contexto curto (~2048). Serve para testes; para material longo, prefira `llama3.2` ou `qwen2.5:7b`.
+
+## Google Search API (RAG — opcional)
 1. Crie uma Custom Search Engine: https://programmablesearchengine.google.com/
 2. Habilite Custom Search API no Google Cloud e crie uma API Key
 3. Configure:
@@ -16,7 +40,7 @@
    ```
 
 ## Groq API (opcional — servidor)
-- `GROQ_API_KEY`: fallback de chat
+- `GROQ_API_KEY`: fallback de chat (não é o caminho principal)
 
 ## Firebase (client — públicos)
 - `VITE_FIREBASE_API_KEY`
@@ -35,3 +59,7 @@
 1. Copie `.env.vercel.example` para `.env.local`
 2. Substitua pelos valores reais
 3. `.env*` já está no `.gitignore`
+
+## Notas
+- TTS (vozes) ainda depende de endpoints Gemini e **não** roda no Ollama.
+- Cloud Functions (`functions/`) podem ainda referenciar Gemini legado; o app Next (site) usa Ollama.
