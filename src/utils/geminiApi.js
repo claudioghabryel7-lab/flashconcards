@@ -659,8 +659,9 @@ export async function checkGeminiApiKeysStatus() {
         {
           name: 'IA local (Ollama no PC)',
           keyPreview: GEMINI_FLASH_MODEL,
-          status: 'ok',
+          status: 'active',
           message: 'Proxy → Ollama OK',
+          remainingQuota: 'Ilimitado (seu PC)',
         },
       ]
     } catch (err) {
