@@ -88,8 +88,12 @@ async function postGenerate(baseUrl, body) {
   try {
     data = JSON.parse(rawText)
   } catch {
+    const tunnelDown =
+      response.status === 503 || /tunnel unavailable|bad gateway/i.test(rawText)
     const err = new Error(
-      `Ollama retornou resposta inválida (HTTP ${response.status})`,
+      tunnelDown
+        ? `Túnel indisponível (HTTP ${response.status}) em ${baseUrl}. Remova OLLAMA_BASE_URL do Vercel ou use o site no Chrome do PC com Ollama local (sem túnel).`
+        : `Ollama retornou resposta inválida (HTTP ${response.status}) em ${baseUrl}`,
     )
     err.status = response.status
     throw err

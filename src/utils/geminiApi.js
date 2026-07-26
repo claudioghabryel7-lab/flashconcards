@@ -673,39 +673,20 @@ function formatWaitTime(seconds) {
 export async function checkGeminiApiKeysStatus() {
   if (typeof window !== 'undefined') {
     try {
-      const { probeLocalOllama, getLocalOllamaConfig, generateViaLocalOllama } =
-        await import('./ollamaBrowserClient.js')
+      const { getLocalOllamaConfig, generateViaLocalOllama } = await import(
+        './ollamaBrowserClient.js'
+      )
       const cfg = getLocalOllamaConfig()
-      const localOk = await probeLocalOllama()
-      if (localOk) {
-        await generateViaLocalOllama('ping', {
-          model: cfg.model,
-          generationConfig: { maxOutputTokens: 8, temperature: 0 },
-        })
-        return [
-          {
-            name: 'IA local (Ollama no PC)',
-            keyPreview: cfg.model,
-            status: 'active',
-            message: `Browser → ${cfg.baseUrl} (sem túnel)`,
-            remainingQuota: 'Ilimitado (seu PC)',
-          },
-        ]
-      }
-
-      // Fallback: proxy/túnel
-      await callGeminiViaServer('ping', {
+      await generateViaLocalOllama('ping', {
+        model: cfg.model,
         generationConfig: { maxOutputTokens: 8, temperature: 0 },
-        useGoogleSearch: false,
-        models: [cfg.model || GEMINI_FLASH_MODEL],
-        silent: true,
       })
       return [
         {
           name: 'IA local (Ollama no PC)',
-          keyPreview: cfg.model || GEMINI_FLASH_MODEL,
+          keyPreview: cfg.model,
           status: 'active',
-          message: 'Proxy/túnel → Ollama OK (localhost do browser falhou)',
+          message: `Browser → ${cfg.baseUrl} (sem túnel)`,
           remainingQuota: 'Ilimitado (seu PC)',
         },
       ]
@@ -717,7 +698,7 @@ export async function checkGeminiApiKeysStatus() {
           status: 'missing',
           message:
             err?.message ||
-            'Deixe o Ollama aberto no PC e configure OLLAMA_ORIGINS=* (sem precisar de túnel).',
+            'Abra o Ollama no PC, no CMD rode: setx OLLAMA_ORIGINS "*" — reinicie o Ollama e use o site neste mesmo PC.',
         },
       ]
     }
