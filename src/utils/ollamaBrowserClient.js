@@ -124,11 +124,20 @@ export async function generateViaLocalOllama(prompt, options = {}) {
       try {
         data = JSON.parse(rawText)
       } catch {
-        lastError = `Ollama local retornou resposta inválida (HTTP ${res.status})`
+        if (res.status === 503 || /tunnel unavailable|bad gateway/i.test(rawText)) {
+          lastError =
+            'Túnel/Ollama indisponível (HTTP 503). Não use localtunnel — deixe só o Ollama aberto e acesse o site neste PC.'
+        } else {
+          lastError = `Ollama local retornou resposta inválida (HTTP ${res.status}). Confira se o app Ollama está aberto e o modelo "${model}" instalado (ollama pull ${model}).`
+        }
         continue
       }
       if (!res.ok) {
-        lastError = data?.error || `HTTP ${res.status}`
+        lastError =
+          data?.error ||
+          (res.status === 503
+            ? 'Ollama ocupado/indisponível (HTTP 503). Aguarde ou reinicie o Ollama.'
+            : `HTTP ${res.status}`)
         continue
       }
       const shaped = toGeminiShape(data, model)

@@ -163,32 +163,31 @@ function extractSearchTopic(prompt) {
 }
 
 /**
- * Browser: 1º tenta Ollama em localhost no PC (sem túnel).
- * Se falhar (Ollama off / CORS), cai no proxy /api/gemini/generate.
+ * Browser: usa Ollama em localhost no PC (sem túnel).
+ * Não cai mais no proxy/túnel loca.lt (costuma dar HTTP 503).
  */
 async function callGeminiViaServer(prompt, options = {}) {
   if (typeof window !== 'undefined') {
+    const { generateViaLocalOllama, getLocalOllamaConfig } = await import(
+      './ollamaBrowserClient.js'
+    )
+    const cfg = getLocalOllamaConfig()
     try {
-      const { generateViaLocalOllama, probeLocalOllama } = await import(
-        './ollamaBrowserClient.js'
-      )
-      const available = await probeLocalOllama()
-      if (available) {
-        if (!options.silent) {
-          console.log('🖥️ IA local direto no PC (localhost:11434) — sem túnel')
-        }
-        return await generateViaLocalOllama(prompt, options)
-      }
-    } catch (localErr) {
       if (!options.silent) {
-        console.warn(
-          '⚠️ Ollama localhost indisponível, tentando proxy do servidor…',
-          localErr?.message || localErr,
-        )
+        console.log(`🖥️ IA local direto no PC (${cfg.baseUrl}) — sem túnel`)
       }
+      return await generateViaLocalOllama(prompt, options)
+    } catch (localErr) {
+      const err = new Error(
+        localErr?.message ||
+          `Ollama indisponível em ${cfg.baseUrl}. Abra o Ollama no PC, rode setx OLLAMA_ORIGINS "*" no CMD, reinicie o Ollama e recarregue o site neste mesmo computador.`,
+      )
+      err.code = localErr?.code || 'ollama_local_unavailable'
+      throw err
     }
   }
 
+  // Só no servidor Node (não no browser)
   const { callGeminiProxy } = await import('./secureLlmClient.js')
   return callGeminiProxy({ prompt, ...options })
 }
@@ -674,39 +673,20 @@ function formatWaitTime(seconds) {
 export async function checkGeminiApiKeysStatus() {
   if (typeof window !== 'undefined') {
     try {
-      const { probeLocalOllama, getLocalOllamaConfig, generateViaLocalOllama } =
-        await import('./ollamaBrowserClient.js')
+      const { getLocalOllamaConfig, generateViaLocalOllama } = await import(
+        './ollamaBrowserClient.js'
+      )
       const cfg = getLocalOllamaConfig()
-      const localOk = await probeLocalOllama()
-      if (localOk) {
-        await generateViaLocalOllama('ping', {
-          model: cfg.model,
-          generationConfig: { maxOutputTokens: 8, temperature: 0 },
-        })
-        return [
-          {
-            name: 'IA local (Ollama no PC)',
-            keyPreview: cfg.model,
-            status: 'active',
-            message: `Browser → ${cfg.baseUrl} (sem túnel)`,
-            remainingQuota: 'Ilimitado (seu PC)',
-          },
-        ]
-      }
-
-      // Fallback: proxy/túnel
-      await callGeminiViaServer('ping', {
+      await generateViaLocalOllama('ping', {
+        model: cfg.model,
         generationConfig: { maxOutputTokens: 8, temperature: 0 },
-        useGoogleSearch: false,
-        models: [cfg.model || GEMINI_FLASH_MODEL],
-        silent: true,
       })
       return [
         {
           name: 'IA local (Ollama no PC)',
-          keyPreview: cfg.model || GEMINI_FLASH_MODEL,
+          keyPreview: cfg.model,
           status: 'active',
-          message: 'Proxy/túnel → Ollama OK (localhost do browser falhou)',
+          message: `Browser → ${cfg.baseUrl} (sem túnel)`,
           remainingQuota: 'Ilimitado (seu PC)',
         },
       ]
@@ -718,7 +698,7 @@ export async function checkGeminiApiKeysStatus() {
           status: 'missing',
           message:
             err?.message ||
-            'Deixe o Ollama aberto no PC e configure OLLAMA_ORIGINS=* (sem precisar de túnel).',
+            'Abra o Ollama no PC, no CMD rode: setx OLLAMA_ORIGINS "*" — reinicie o Ollama e use o site neste mesmo PC.',
         },
       ]
     }
